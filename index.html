@@ -628,7 +628,7 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261110-1059';
+const BUILD_ID = '20261110-1117';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1018,12 +1018,14 @@ const LEVELS = [
 const LEVEL      = id => LEVELS.find(l=>l.id===id) || LEVELS[0];
 const isContainer = id => id !== 'nano';
 const STRANDS = ['Career & Technical','Mathematics','Science','English Language Arts','Social Studies'];
+const STRAND_COLOR = { 'Career & Technical':'#FFBF23','Mathematics':'#8FB4EC','Science':'#86CDA2',
+                       'English Language Arts':'#BFA6EE','Social Studies':'#EDB08A' };
 const STRAND_TONE = { 'Career & Technical':'gold','Mathematics':'brand','Science':'teal',
                       'English Language Arts':'violet','Social Studies':'' };
 
 /* ---------- status ---------- */
 const STATUSES = [
-  { id:'draft',     label:'Draft',        tone:'',      who:'Anyone with edit rights' },
+  { id:'draft',     label:'Draft',        tone:'',      who:'Being written. Not visible to students.' },
   { id:'review',    label:'In review',    tone:'brand', who:'Waiting on an administrator' },
   { id:'approved',  label:'Approved',     tone:'green', who:'Cleared, not yet released' },
   { id:'published', label:'Published',    tone:'green', who:'Visible to students' }
@@ -1263,6 +1265,8 @@ function bindSignIn(){
     S.user = known ? { name:known.name, email, role: role==='pick' ? known.role : role }
       : { name: nameFromEmail(email) || (role==='admin'?'A. Administrator':'T. Teacher'),
           email: email || `${role==='admin'?'admin':'teacher'}@district.org`, role: role==='pick' ? 'teacher' : role };
+    S.people = S.people || [];
+    if(!S.people.some(p=>p.email===S.user.email)) S.people.push({ name:S.user.name, email:S.user.email, role:S.user.role });
     S.view = 'library';
     render();
   };
@@ -1703,11 +1707,19 @@ function promptWeek(cred, container){
     ? childrenOf(container).filter(c=>c.id!==cred.id && c.title).map((c,i)=>`${c.title}`)
     : [];
   const sub = cred.subCluster ? `\nSub-cluster: ${cred.subCluster} (${clusterOf(cred.subCluster)})` : '';
+  const STRAND_CORE = {
+    'Mathematics':'angles and degrees, ratios and rates, percent and percent change, averages and spread, unit conversion, measurement error, reading and building graphs, linear relationships',
+    'Science':'the body systems, forces and motion, energy, chemistry of solutions, microbiology, the scientific method — whichever this field actually rests on',
+    'English Language Arts':'technical reading, summarising, precise vocabulary, writing for a professional reader, structuring an argument, speaking and listening',
+    'Social Studies':'history of the field, law and regulation, ethics, economics of the work, how institutions and communities shape it'
+  };
   const strand = cred.strand && cred.strand !== 'Career & Technical'
-    ? `\nThis week is the ${cred.strand} strand of a Career Badge. Teach ${cred.strand} properly, but
-every example, dataset and task must come from ${cred.subCluster || 'this field'}. It is not a general
-${cred.strand} lesson that happens to mention the trade.` : '';
-
+    ? `\nThis week is the ${cred.strand} strand of a Career Badge. It is a ${cred.strand} lesson, not a lesson about the
+field that mentions ${cred.strand.toLowerCase()}. The objectives are ${cred.strand} objectives; every section of the reading
+teaches a ${cred.strand} concept (from: ${STRAND_CORE[cred.strand]||cred.strand}) and works it through with real examples
+from ${cred.subCluster || 'this field'}; at least six of the ten content questions require the ${cred.strand} skill itself
+${cred.strand==='Mathematics'?'— most of them a calculation with numbers from the field, the right answer computed and checked':''}.
+The field supplies every example, dataset and task.` : '';
   /* Three groundings: a document to stay traceable to, a brief that names an
      employer, or a brief that names only a topic. */
   const isBrief   = !!(cred.source && cred.source.kind === 'Brief');
@@ -1880,6 +1892,7 @@ async function generateWeek(credId){
       busyStage(`Lengthening the reading to 900–1,100 words (now ${readingWords(j)})`);
       await lengthenReading(j, p.system);
     }
+    normalizeWeek(j);
     await repairQuizzes(j, p.system);
     pushRevision(cred, 'generated', j);
     cred.content = j;
@@ -1925,6 +1938,27 @@ Return JSON only: { "sections": [ { "heading": "", "body": "" } ] } — the same
   const list = out && (out.sections || (Array.isArray(out)?out:null));
   if(!list) return;
   secs.forEach((s,i)=>{ const n=list[i]; if(n && n.body && String(n.body).split(/\s+/).length > String(s.body||'').split(/\s+/).length) s.body = n.body; });
+}
+
+/* Labels that only steer rendering are mapped to the nearest known kind
+   rather than failing the week: a scene called "steps" is a sequence. */
+const SCENE_ALIAS = { steps:'sequence', process:'sequence', procedure:'sequence', timeline:'sequence',
+  table:'comparison', contrast:'comparison', 'compare':'comparison', cause:'cause-and-effect', effect:'cause-and-effect',
+  diagram:'annotated-diagram', labeled:'annotated-diagram', mistake:'counter-example', 'non-example':'counter-example' };
+function normalizeWeek(j){
+  ((j.video||{}).scenes||[]).forEach(s=>{
+    const k = String(s.kind||'').toLowerCase().trim();
+    s.kind = SCENE_KINDS.includes(k) ? k : (SCENE_ALIAS[k] || Object.keys(SCENE_ALIAS).filter(a=>k.includes(a)).map(a=>SCENE_ALIAS[a])[0] || 'sequence');
+  });
+  const vk = VISUAL_KINDS.map(v=>v.id);
+  ((j.reading||{}).sections||[]).forEach(sec=> (sec.visuals||[]).forEach(v=>{
+    const k = String(v.kind||'').toLowerCase().replace(/[^a-z]/g,'');
+    v.kind = vk.includes(k) ? k : (/key|point|tip/.test(k)?'keypoint':/work|scen|case/.test(k)?'workplace':/mistake|error|wrong/.test(k)?'mistake'
+      :/table|compar/.test(k)?'table':/step|proced|process/.test(k)?'steps':/check|list/.test(k)?'checklist':/decis|if/.test(k)?'decision':'keypoint');
+  }));
+  const L = Object.keys(COGNITIVE_MIX);
+  (j.contentQuiz||[]).forEach(q=>{ const m = L.find(l=>l.toLowerCase()===String(q.level||'').toLowerCase().trim()); if(m) q.level = m; });
+  [...(j.vocabQuiz||[]), ...(j.contentQuiz||[])].forEach(q=>{ q.a = +q.a||0; });
 }
 
 /* The quiz rules are checked, not trusted. When the model misses the
@@ -2261,7 +2295,7 @@ function bindCreate(){
     const typed = c.title.trim();
     const rec = {
       id: uid(c.level), level:c.level, titleAuto: !typed,
-      title: typed || (src ? (src.kind==='Brief' ? String(src.brief.topic||'').trim().replace(/^./,x=>x.toUpperCase()) : src.name==='Pasted text' ? 'Untitled' : src.name.replace(/\.[^.]+$/,'')) : 'Untitled'),
+      title: typed || (src ? (src.kind==='Brief' ? String(src.brief.topic||'').trim().replace(/^./,x=>x.toUpperCase()) : src.name==='Pasted text' ? (String(src.text).split('\n').map(x=>x.trim()).find(Boolean)||'Untitled').slice(0,70).replace(/[\s:,–—-]+$/,'') : src.name.replace(/\.[^.]+$/,'')) : 'Untitled'),
       subtitle:c.subtitle.trim(), subCluster:c.subCluster||null,
       strand: c.level==='nano' ? c.strand : null,
       status:'draft',
@@ -2526,9 +2560,9 @@ function viewContainer(c){
                 </div>
               </div>
               <div class="row gap" style="gap:6px">
-                ${ed&&i>0?`<button class="btn sm" data-cmove="${k.id}" data-dir="-1" title="Move up">↑</button>`:''}
-                ${ed&&i<kids.length-1?`<button class="btn sm" data-cmove="${k.id}" data-dir="1" title="Move down">↓</button>`:''}
-                ${ed?`<button class="btn sm" data-cdrop="${k.id}">Remove</button>`:''}
+                ${ed&&!S.busy&&i>0?`<button class="btn sm" data-cmove="${k.id}" data-dir="-1" title="Move up">↑</button>`:''}
+                ${ed&&!S.busy&&i<kids.length-1?`<button class="btn sm" data-cmove="${k.id}" data-dir="1" title="Move down">↓</button>`:''}
+                ${ed&&!S.busy?`<button class="btn sm" data-cdrop="${k.id}">Remove</button>`:''}
                 <button class="btn sm primary" data-openkid="${k.id}">${k.level==='nano'&&!k.content&&canEdit(k)?'Write it':'Open'} ${ic('arrowR')}</button>
               </div>
             </div>
@@ -2536,12 +2570,13 @@ function viewContainer(c){
         }).join('')}
       </div>`:`<div class="xs muted2 mt16">Nothing in it yet.</div>`}
 
-      ${ed && room>0?`<div class="row gap wrap mt16" style="gap:8px">
+      ${ed && room>0 && !S.busy && !(c.level==='badge' && !c.badgePlan)?`<div class="row gap wrap mt16" style="gap:8px">
         <button class="btn" data-cnewkid>${ic('spark')} ${lv.of==='nano'?'Write a new week':`New ${of.label.toLowerCase()}`}</button>
         <button class="btn" data-creuse>${ic('book')} Reuse one already built</button>
         <div class="grow"></div>
         <span class="xs muted2" style="align-self:center">${room} more needed</span>
-      </div>`: room<=0 ? `<div class="callout tip mt16"><span class="ic">${ic('check')}</span>
+      </div>`: ed && c.level==='badge' && !c.badgePlan ? `<div class="xs muted2 mt16">Plan the strands first — each new week then takes the next place in the plan.</div>`
+        : room<=0 ? `<div class="callout tip mt16"><span class="ic">${ic('check')}</span>
         <div>All ${lv.count} ${ofName(lv.count)} are in place.</div></div>` : ''}
     </div>
 
@@ -2665,12 +2700,12 @@ function badgePlanPanel(c){
     ${p?`
       <div class="row mt20" style="gap:3px;height:32px;border-radius:8px;overflow:hidden">
         ${(p.strands||[]).map(s=>`<div title="${esc(s.subject)}: ${s.weeks}"
-          style="flex:${s.weeks||0};background:var(--surface-3);display:grid;place-items:center;min-width:26px">
+          style="flex:${s.weeks||0};background:${STRAND_COLOR[s.subject]||'var(--surface-3)'};display:grid;place-items:center;min-width:26px">
           <span class="xs" style="font-weight:700">${s.weeks}</span></div>`).join('')}
       </div>
       <div class="mt16" style="display:grid;gap:9px">
         ${(p.strands||[]).map(s=>`<div class="row gap" style="gap:10px;align-items:flex-start">
-          <span class="pill xs ${STRAND_TONE[s.subject]||''}" style="flex:none;min-width:150px">${esc(s.subject)}</span>
+          <span class="pill xs" style="flex:none;min-width:170px;white-space:nowrap"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${STRAND_COLOR[s.subject]||'#ccc'};margin-right:6px"></i>${esc(s.subject)}</span>
           <div class="grow"><div class="xs"><b>${s.weeks} week${s.weeks===1?'':'s'}</b> · built ${counts[s.subject]||0}</div>
             <div class="xs muted mt4">${esc(s.why||'')}</div></div>
         </div>`).join('')}
@@ -2680,7 +2715,7 @@ function badgePlanPanel(c){
     ${p && (p.sequence||[]).length?`<details class="mt16"><summary class="small" style="cursor:pointer;font-weight:600">The thirty weeks in order</summary>
       <div class="mt12" style="display:grid;gap:6px">${p.sequence.map(w=>`<div class="row gap xs" style="gap:8px;align-items:flex-start">
         <span class="pill xs" style="flex:none;min-width:30px">${esc(String(w.week))}</span>
-        <span class="pill xs ${STRAND_TONE[w.strand]||''}" style="flex:none">${esc(w.strand||'')}</span>
+        <span class="pill xs" style="flex:none;white-space:nowrap"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${STRAND_COLOR[w.strand]||'#ccc'};margin-right:6px"></i>${esc(w.strand||'')}</span>
         <span><b>${esc(w.title||'')}</b> — <span class="muted">${esc(w.focus||'')}</span></span></div>`).join('')}</div></details>`:''}
     ${editable(c)?`<div class="actbar"><span class="xs muted">${p?'New weeks follow this sequence: the next one takes the next planned title and strand.':'Nothing planned yet. Plan it before adding weeks.'}</span>
       <button class="btn ${p?'':'primary'}" ${aiLive()&&c.subCluster&&!S.busy?'':'disabled'} data-cbadgeplan>${p?'Replan':'Plan the strands'} ${ic('arrowR')}</button></div>`:''}
@@ -3690,7 +3725,14 @@ Rules:
 - Every academic week is contextualised to this sub-cluster, not generic.`
     });
     const j = extractJSON(raw);
-    if(!j) throw new Error('The plan came back unreadable.');
+    if(!j || !(j.strands||[]).length) throw new Error('The plan came back unreadable. Nothing was changed.');
+    /* The week-by-week sequence is what teachers build from, so the strand
+       totals are taken from it — otherwise a badge built exactly to plan
+       could never pass its own strand check. */
+    if((j.sequence||[]).length===30){
+      const n = {}; j.sequence.forEach((w,i)=>{ w.week=i+1; n[w.strand]=(n[w.strand]||0)+1; });
+      (j.strands||[]).forEach(s=>{ s.weeks = n[s.subject]||0; });
+    }
     const total = (j.strands||[]).reduce((n,s)=>n+(s.weeks||0),0);
     c.badgePlan = j; c.updatedAt = nowISO();
     toast(total===30 ? 'Thirty weeks planned' : `Planned, but the strands total ${total} — replan it`);
@@ -4134,7 +4176,7 @@ function bindAdmin(){
   $$('[data-atab]').forEach(b=> b.onclick = ()=>{ S.adminTab=b.dataset.atab; render(); });
 
   /* taxonomy */
-  $$('[data-asub]').forEach(b=> b.onclick = ()=>{ S.taxOpen = b.dataset.asub; render(); });
+  $$('[data-asub]').forEach(b=> b.onclick = ()=>{ S.taxOpen = b.dataset.asub; render(); const t=$('#txname'); if(t){ t.scrollIntoView({block:'center'}); t.focus(); } });
   const tc=$('[data-taxclose]'); if(tc) tc.onclick = ()=>{ S.taxOpen=null; render(); };
   const tsv=$('[data-taxsave]');
   if(tsv) tsv.onclick = ()=>{
