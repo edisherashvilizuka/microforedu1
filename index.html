@@ -598,6 +598,8 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
 .player .cap{font-family:var(--fd);font-size:40px;line-height:1.15;font-weight:600}
 .player .kind{display:inline-block;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--brand);margin-bottom:16px}
 .player .art{margin-top:28px;display:flex;gap:14px;flex-wrap:wrap}
+.player .shows{margin-top:18px;max-width:640px;font-size:14.5px;line-height:1.5;color:rgba(255,255,255,.62)}
+.player .shows b{color:var(--brand);font-weight:600;margin-right:6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 .player .art i{display:block;height:64px;border-radius:12px;background:rgba(255,191,35,.18);border:1px solid rgba(255,191,35,.45);
   animation:pop .5s both}
 .player .sub{padding:18px 40px 8px;font-size:17px;line-height:1.55;color:rgba(255,255,255,.86);max-width:1000px;margin:0 auto;min-height:72px}
@@ -636,7 +638,7 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261110-1241';
+const BUILD_ID = '20261110-1257';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1799,7 +1801,7 @@ Return JSON in exactly this shape:
                { "level": "Developing", "desc": "" }, { "level": "Beginning", "desc": "" }]
   },
   "summarizing": {
-    "activity": { "name": "${sum.name}", "instructions": "what the student does for the ${sum.name}, 40-90 words, addressed to the student, ready to use with no editing",
+    "activity": { "name": "${sum.name}", "instructions": "what the student does for the ${sum.name}, 30-80 words, addressed to the student, ready to use with no editing — do not repeat the items here",
                   "items": ["the concrete parts it needs — e.g. the questions of an exit ticket, the criteria of a self-audit; empty if none"] },
     "steps": [${REFLECTION_STEPS.map(s=>`{ "id": "${s.id}", "prompt": "written to the student as \"you\", referring to the actual Day 1 scenario — never opening by addressing them by job title — ${s.asks}" }`).join(',\n              ')}],
     "openQuestion": "the open question the reflection ends on",
@@ -1891,6 +1893,7 @@ async function generateWeek(credId){
   const cred = CRED(credId);
   if(!cred || cred.level!=='nano' || S.busy) return;
   const container = usedBy(credId)[0] || null;
+  const hadContent = !!cred.content;
   busyStart(`Writing ${cred.title && !isPlaceholderTitle(cred) ? cred.title : 'the week'}`);
   try{
     const p = promptWeek(cred, container);
@@ -1912,7 +1915,8 @@ async function generateWeek(credId){
     spreadKeys(j.vocabQuiz); spreadKeys(j.contentQuiz); j.keysSpread = true;
     pushRevision(cred, 'generated', j);
     cred.content = j;
-    if(isPlaceholderTitle(cred) && j.title){ cred.title = j.title; cred.titleAuto = true; }
+    // The week is named once, the first time it is written; a regenerate never renames it.
+    if(!hadContent && isPlaceholderTitle(cred) && j.title){ cred.title = j.title; cred.titleAuto = true; }
     else if(cred.title) j.title = cred.title;   // a title the teacher chose is the lesson heading too
     cred.updatedAt = cred.contentAt = nowISO();
     toast(`${esc(cred.title)} written · ${checksPassed(j)} of ${checksTotal(j)} checks passed`);
@@ -1992,7 +1996,7 @@ async function repairSummarizing(j, system, cred){
   const out = extractJSON(await callModel({ system, maxTokens:1200, user:
 `Week: "${j.title||cred.title}". Essential Question: ${j.essentialQuestion||''}
 Write the summarizing activity for Day 5 as a ${sum.name}: ${sum.blurb}
-Addressed to the student, 40-90 words, ready to use with no editing. If it needs concrete parts (questions, criteria), list them.
+Addressed to the student, 30-80 words, ready to use with no editing. If it needs concrete parts (questions, criteria), list them as items and do not repeat them in the instructions.
 Return JSON only: { "name": "${sum.name}", "instructions": "", "items": [] }` }));
   if(out && out.instructions) sm.activity = { name: sum.name, instructions: String(out.instructions), items: Array.isArray(out.items) ? out.items.map(String) : [] };
 }
@@ -2092,7 +2096,7 @@ function busyEnd(){ clearInterval(BUSY_T); S.busy=false; S.busyLabel=''; S.busyS
    teacher chooses which one the credential uses. */
 function pushRevision(cred, kind, content){
   cred.revisions = cred.revisions || [];
-  if(cred.content) cred.revisions.push({ at: cred.updatedAt || nowISO(),
+  if(cred.content) cred.revisions.push({ at: cred.contentAt || cred.updatedAt || nowISO(),
     by: cred.lastEditedBy || (S.user&&S.user.name) || '', kind: cred.lastKind || 'generated',
     content: JSON.parse(JSON.stringify(cred.content)) });
   cred.lastKind = kind;
@@ -3339,6 +3343,7 @@ function playVideo(v){
         <span class="kind">${esc(v.title||'')} · ${i+1} of ${v.scenes.length}</span>
         <div class="cap">${esc(s.caption||'')}</div>
         <div class="art">${art(s.kind)}</div>
+        ${s.shows?`<div class="shows"><b>On screen</b> ${esc(s.shows)}</div>`:''}
       </div></div>
       <div class="sub">${esc(s.narration||'')}</div>
       <div class="ctl">
@@ -3829,6 +3834,17 @@ Return JSON only: { "questions": [ { "stem": "", "o": ["","","",""], "a": 0, "wh
   busyEnd();
 }
 
+/* The week-by-week sequence is the plan teachers build from, so strand
+   totals are always taken from it (a strand the sequence uses but the list
+   forgot is added). Also applied to plans saved before this rule. */
+function reconcileBadgePlan(j){
+  if(!j || (j.sequence||[]).length!==30) return j;
+  const n = {}; j.sequence.forEach((w,i)=>{ w.week=i+1; n[w.strand]=(n[w.strand]||0)+1; });
+  j.strands = j.strands || [];
+  j.strands.forEach(s=>{ s.weeks = n[s.subject]||0; });
+  Object.keys(n).forEach(k=>{ if(!j.strands.some(s=>s.subject===k)) j.strands.push({ subject:k, weeks:n[k], emphasis:'', why:'' }); });
+  return j;
+}
 async function generateBadgePlan(credId){
   const c = CRED(credId); if(!c || c.level!=='badge' || S.busy) return;
   const sub = subCluster(c.subCluster) || { name:c.subCluster||'', careers:[], desc:'' };
@@ -3868,10 +3884,7 @@ Rules:
     /* The week-by-week sequence is what teachers build from, so the strand
        totals are taken from it — otherwise a badge built exactly to plan
        could never pass its own strand check. */
-    if((j.sequence||[]).length===30){
-      const n = {}; j.sequence.forEach((w,i)=>{ w.week=i+1; n[w.strand]=(n[w.strand]||0)+1; });
-      (j.strands||[]).forEach(s=>{ s.weeks = n[s.subject]||0; });
-    }
+    reconcileBadgePlan(j);
     const total = (j.strands||[]).reduce((n,s)=>n+(s.weeks||0),0);
     c.badgePlan = j; c.updatedAt = nowISO();
     toast(total===30 ? 'Thirty weeks planned' : `Planned, but the strands total ${total} — replan it`);
@@ -3979,6 +3992,8 @@ function workflowPanel(c){
       </div>`).join('')}
     </div>`:''}
 
+    ${(()=>{ const h=(c.history||[]).slice(-1)[0]; return c.status==='draft' && h && h.feedback ? `<div class="callout why mt16"><span class="ic">${ic('flag')}</span>
+      <div><b>Sent back by ${esc(h.by)}:</b> ${esc(h.note)}</div></div>` : ''; })()}
     ${stop.length && (c.status==='draft' || c.status==='review')?`<div class="callout ex mt16"><span class="ic">${ic('flag')}</span>
       <div><b>${c.status==='draft'?'Not ready to submit.':'Cannot be approved yet.'}</b><ul style="margin:6px 0 0;padding-left:18px">
         ${stop.map(x=>`<li style="margin-bottom:3px">${esc(x)}</li>`).join('')}</ul></div></div>`:''}
@@ -4010,8 +4025,10 @@ function liveSnapshot(c){
     children:c.children||null, cumulative:c.cumulative||null, publishedAt:c.publishedAt }));
 }
 
-function moveTo(c, to, label, quiet){
+function moveTo(c, to, label, quiet, note){
   const by = (S.user&&S.user.name)||'';
+  const from = c.status;
+  const backLabel = label==='Send back' ? 'Sent back' : label==='Withdraw' ? 'Withdrawn' : null;
   c.history = c.history || [];
   if(to==='unpublished'){
     c.status='draft'; c.live=null; c.history.push({ to:'draft', label:'Unpublished', by, at:nowISO() });
@@ -4020,7 +4037,7 @@ function moveTo(c, to, label, quiet){
     c.history.push({ to:'draft', label:'Changes started', by, at:nowISO(), note:'published version stays live' });
   } else {
     c.status = to;
-    c.history.push({ to, label: STATUS(to).label, by, at: nowISO() });
+    c.history.push({ to, label: backLabel || STATUS(to).label, by, at: nowISO(), ...(note?{ note, feedback:true }:{}) });
     if(to==='published'){ c.publishedAt = nowISO(); c.live = null; }
     if(to==='approved')  c.approvedBy  = by;
     if(to==='review')    c.submittedBy = by;
@@ -4030,6 +4047,17 @@ function moveTo(c, to, label, quiet){
      weeks, approving it approves them, publishing it publishes them. Never
      the other way, and never downwards — a shared week already further
      along is left where it is. */
+  /* Sending back or withdrawing a container takes back what came in with it,
+     so the author can change those weeks too. Weeks submitted on their own,
+     or with another credential, are left alone. */
+  if(c.level!=='nano' && backLabel && RANK[from]>0){
+    descendants(c).forEach(k=>{
+      const last = (k.history||[]).slice(-1)[0] || {};
+      if(k.status===from && last.note===`with ${c.title}`){
+        k.status='draft'; k.history.push({ to:'draft', label:backLabel, by, at:nowISO(), note:`with ${c.title}` }); k.updatedAt=nowISO();
+      }
+    });
+  }
   if(c.level!=='nano' && RANK[to]!=null && RANK[to]>0){
     descendants(c).forEach(k=>{
       if(RANK[k.status] === RANK[to]-1){
@@ -4044,7 +4072,16 @@ function moveTo(c, to, label, quiet){
   if(!quiet){ toast(`${esc(c.title)} — ${esc(said)}`); render(); }
 }
 function bindWorkflow(c){
-  $$('[data-move]').forEach(b=> b.onclick = ()=> moveTo(c, b.dataset.move, b.dataset.movelabel));
+  $$('[data-move]').forEach(b=> b.onclick = ()=>{
+    if(b.dataset.movelabel!=='Send back') return moveTo(c, b.dataset.move, b.dataset.movelabel);
+    modal(`<div><h2>Send back ${esc(c.title||'')}</h2>
+      <p class="small muted mt8">It returns to draft so ${esc(c.createdBy||'the author')} can change it${c.level!=='nano'?', with everything that came in with it':''}.</p>
+      <label class="lbl mt16">What needs to change <span class="muted2" style="font-weight:400">— shown to the author</span></label>
+      <textarea class="field" id="sbnote" rows="3" placeholder="e.g. Week 3's reading needs the unit conversions worked through"></textarea>
+      <div class="actbar"><button class="btn" data-close>Cancel</button><button class="btn primary" data-sbok>Send back</button></div></div>`,
+      { after:(m,close)=>{ $('#sbnote',m).focus();
+        $('[data-sbok]',m).onclick = ()=>{ const note=$('#sbnote',m).value.trim(); close(); moveTo(c, 'draft', 'Send back', false, note); }; } });
+  });
 }
 
 /* ---------- the administrator's queue ---------- */
@@ -4420,6 +4457,7 @@ function restore(){
     // Weeks written before answer positions were spread get them spread once. Only option positions move — never text or which answer is right.
     S.creds.forEach(c=>{
       if(c.content && !c.content.keysSpread && c.content.contentQuiz){ spreadKeys(c.content.vocabQuiz); spreadKeys(c.content.contentQuiz); c.content.keysSpread = true; }
+      if(c.badgePlan) reconcileBadgePlan(c.badgePlan);
       if(c.cumulative && !c.cumulative.keysSpread){ spreadKeys(c.cumulative.questions); c.cumulative.keysSpread = true; }
     });
     S.people = d.people || []; S.user = d.user || null; S.quality = d.quality || S.quality;
