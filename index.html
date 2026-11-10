@@ -622,13 +622,21 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
   .appbar .avatarbtn{display:none}
   .appbar .row.gap{gap:6px}
   .page{padding-left:16px;padding-right:16px}
+  .login-form{padding:32px 16px}
+  .studentbar{flex-wrap:wrap}
+  .studentbar > div:first-child{flex:1 1 100%}
+  .credmeta{align-items:flex-start !important}
 }
+/* Back buttons carry a credential's title, which can be long. */
+.btn.back{max-width:100%;min-width:0}
+.btn.back .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.studentbar .row{min-width:0;max-width:100%;flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261110-1153';
+const BUILD_ID = '20261110-1241';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1085,7 +1093,7 @@ function openCred(id, fromId){
 }
 function backButton(){
   const t = (S.trail||[]), up = t.length ? CRED(t[t.length-1]) : null;
-  return up ? `<button class="btn ghost sm" data-back>${ic('arrowL')} ${esc(up.title||'Back')}</button>`
+  return up ? `<button class="btn ghost sm back" data-back title="${esc(up.title||'Back')}">${ic('arrowL')} <span class="t">${esc(up.title||'Back')}</span></button>`
             : `<button class="btn ghost sm" data-view="library">${ic('arrowL')} Credentials</button>`;
 }
 
@@ -1249,7 +1257,7 @@ function viewSignIn(){
       <div class="divider"></div>
       <div class="xs muted2">Roles are set by your administrator. This build signs you in as
         whichever role you pick, so the two can be compared side by side.</div>
-      <div class="row gap mt12" style="gap:8px">
+      <div class="row gap wrap mt12" style="gap:8px">
         <button class="btn sm" data-signas="teacher">Sign in as a teacher</button>
         <button class="btn sm" data-signas="admin">Sign in as an administrator</button>
       </div>
@@ -1742,6 +1750,9 @@ The course creator chose:
 - Activating strategy: ${act.name} — ${act.blurb}
 - Deliverable: ${del.name} — ${del.blurb} (tool: ${del.tool})
 - Summarizing: ${sum.name} — ${sum.blurb}
+These choices decide the form of the week. The opening must BE a "${act.name}", not a generic
+workplace scenario with the word changed; the deliverable must BE a "${del.name}"; and the
+summarizing activity must BE a "${sum.name}", written out in full, before the five reflection steps.
 
 Return JSON in exactly this shape:
 
@@ -1750,8 +1761,8 @@ Return JSON in exactly this shape:
   "essentialQuestion": "one open-ended question that drives the week and can be answered after it",
   "objectives": ["4 to 6 objectives, each starting with a verb"],
   "activating": {
-    "scenario": "a realistic workplace situation, 90-140 words: a setting, a role, a specific problem, real constraints. Do not teach the answer.",
-    "prompt": "the question put to the student before any teaching, adapted to this scenario"
+    "scenario": "the opening, 90-140 words, written as a ${act.name} (${act.blurb}) and set in a real workplace: a setting, a role, real constraints. Do not teach the answer.",
+    "prompt": "what the student commits to before any teaching — the ${act.name} itself, specific enough to check on Day 5"
   },
   "reading": {
     "title": "textbook-style title",
@@ -1788,17 +1799,19 @@ Return JSON in exactly this shape:
                { "level": "Developing", "desc": "" }, { "level": "Beginning", "desc": "" }]
   },
   "summarizing": {
-    "steps": [${REFLECTION_STEPS.map(s=>`{ "id": "${s.id}", "prompt": "written to this student, naming the actual scenario and role — ${s.asks}" }`).join(',\n              ')}],
+    "activity": { "name": "${sum.name}", "instructions": "what the student does for the ${sum.name}, 40-90 words, addressed to the student, ready to use with no editing",
+                  "items": ["the concrete parts it needs — e.g. the questions of an exit ticket, the criteria of a self-audit; empty if none"] },
+    "steps": [${REFLECTION_STEPS.map(s=>`{ "id": "${s.id}", "prompt": "written to the student as \"you\", referring to the actual Day 1 scenario — never opening by addressing them by job title — ${s.asks}" }`).join(',\n              ')}],
     "openQuestion": "the open question the reflection ends on",
     "peer": { "count": 2, "rules": ${JSON.stringify(PEER_RULES)} }
   },
   "plan": {
     "concept": "one short paragraph on the concept taught. Not daily activities.",
-    "activating": "2-3 sentences: workplace context, instructional purpose, how prior knowledge is activated",
+    "activating": "2-3 sentences: the ${act.name} used, its workplace context, and how prior knowledge is activated",
     "teaching": "3-4 sentences: major concepts, the order they are taught in, workplace connections. Do not reproduce the reading.",
     "standards": [{ "code": "exact code from the list below", "desc": "one line" }],
     "extending": "2-3 sentences: purpose, expected product, workplace connection. No directions, no rubric.",
-    "summarizing": "2 sentences on how the student revisits the question and compares their thinking"
+    "summarizing": "2 sentences: the ${sum.name}, and how the student revisits the question and compares their thinking"
   }
 }
 
@@ -1894,11 +1907,13 @@ async function generateWeek(credId){
     }
     normalizeWeek(j);
     await repairVisuals(j, p.system);
+    await repairSummarizing(j, p.system, cred);
     await repairQuizzes(j, p.system);
     spreadKeys(j.vocabQuiz); spreadKeys(j.contentQuiz); j.keysSpread = true;
     pushRevision(cred, 'generated', j);
     cred.content = j;
     if(isPlaceholderTitle(cred) && j.title){ cred.title = j.title; cred.titleAuto = true; }
+    else if(cred.title) j.title = cred.title;   // a title the teacher chose is the lesson heading too
     cred.updatedAt = cred.contentAt = nowISO();
     toast(`${esc(cred.title)} written · ${checksPassed(j)} of ${checksTotal(j)} checks passed`);
   }catch(e){
@@ -1967,6 +1982,21 @@ Return JSON only: { "visuals": [ { "section": 0, "kind": "", "title": "short lab
   normalizeWeek(j);
 }
 
+/* The summarizing choice has to show up as an activity a student can do.
+   When the model leaves it out, a narrow call writes only that part. */
+async function repairSummarizing(j, system, cred){
+  const sm = j.summarizing = j.summarizing || {};
+  const sum = pickOf('summarizing', (cred.strategies||{}).summarizing);
+  if(sm.activity && String(sm.activity.instructions||'').trim().length > 20){ sm.activity.name = sm.activity.name || sum.name; return; }
+  busyStage(`Writing the ${sum.name.toLowerCase()}`);
+  const out = extractJSON(await callModel({ system, maxTokens:1200, user:
+`Week: "${j.title||cred.title}". Essential Question: ${j.essentialQuestion||''}
+Write the summarizing activity for Day 5 as a ${sum.name}: ${sum.blurb}
+Addressed to the student, 40-90 words, ready to use with no editing. If it needs concrete parts (questions, criteria), list them.
+Return JSON only: { "name": "${sum.name}", "instructions": "", "items": [] }` }));
+  if(out && out.instructions) sm.activity = { name: sum.name, instructions: String(out.instructions), items: Array.isArray(out.items) ? out.items.map(String) : [] };
+}
+
 /* Labels that only steer rendering are mapped to the nearest known kind
    rather than failing the week: a scene called "steps" is a sequence. */
 const SCENE_ALIAS = { steps:'sequence', process:'sequence', procedure:'sequence', timeline:'sequence',
@@ -1995,6 +2025,10 @@ function normalizeWeek(j){
    moved to a balanced, shuffled position — A to D used two or three times
    each in ten. Option text moves with it, so the key stays correct. Options
    that refer to each other ("all of the above", "both A and B") stay put. */
+/* An option that points at other options ("All of the above", "Both A and B",
+   "None of these") only makes sense where it was written, so it pins its
+   question's order. Plain words like "both" or "above 140" do not. */
+function isCrossRef(o){ return /\b(all|none|both|neither|each) of (the )?(above|below|these|those|them|the options)\b|\b(both|neither|either|only) [A-D]\b|\b[A-D],? (and|or|nor|&) [A-D]\b|^\s*(all|none) (of )?(the )?(above|below)\s*\.?\s*$/i.test(String(o||'')); }
 function keyHash(s){ let h=2166136261; for(const ch of String(s)){ h^=ch.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
 function spreadKeys(list){
   if(!Array.isArray(list) || !list.length) return list;
@@ -2003,7 +2037,7 @@ function spreadKeys(list){
   for(let i=slots.length-1;i>0;i--){ seed = (Math.imul(seed,1103515245)+12345)>>>0; const r = seed%(i+1); [slots[i],slots[r]]=[slots[r],slots[i]]; }
   list.forEach((q,i)=>{
     if(!q || !Array.isArray(q.o) || q.o.length!==4) return;
-    if(q.o.some(o=>/\b(above|below|both|neither|none of|all of)\b|\b[A-D] and [A-D]\b/i.test(String(o)))) return;
+    if(q.o.some(isCrossRef)) return;
     const a = +q.a||0, t = slots[i]; if(a===t) return;
     [q.o[a], q.o[t]] = [q.o[t], q.o[a]]; q.a = t;
   });
@@ -2531,7 +2565,7 @@ function credHeader(c, extra){
   const have = credWeeks(c), want = lv.weeks;
   return `<div class="card pad-lg">
     <div class="spread wrap" style="gap:12px;align-items:flex-start">
-      <div style="max-width:62ch">
+      <div style="flex:1 1 320px;min-width:0;max-width:62ch">
         <div class="row gap wrap" style="gap:8px">
           <span class="pill ${lv.tone}">${esc(lv.label)}</span>
           <span class="pill ${st.tone}">${esc(st.label)}</span>
@@ -2542,7 +2576,7 @@ function credHeader(c, extra){
         <h1 class="mt12" style="font-size:27px">${esc(c.title||'Untitled')}</h1>
         ${c.subtitle?`<p class="small muted mt8">${esc(c.subtitle)}</p>`:''}
       </div>
-      <div class="stack" style="gap:8px;align-items:flex-end">
+      <div class="stack credmeta" style="gap:8px;align-items:flex-end;flex:none">
         <span class="pill">${want>1?`${have} of ${want} weeks`:'1 week'}</span>
         <span class="xs muted2">Updated ${esc((c.updatedAt||'').slice(0,10))}${c.createdBy?` · by ${esc(c.createdBy)}`:''}</span>
         ${canEdit(c) && !S.busy?`<div class="row gap" style="gap:6px">
@@ -2807,7 +2841,9 @@ function bindCredCommon(c){
       <div class="actbar"><button class="btn" data-close>Cancel</button><button class="btn primary" data-rnok>Save</button></div></div>`,
     { after:(m,close)=>{ const t=$('#rnt',m); t.focus(); t.select();
       $('[data-rnok]',m).onclick = ()=>{ const v=t.value.trim(); if(!v){ toast('A title is needed'); return; }
-        c.title=v; c.titleAuto=false; c.subtitle=$('#rns',m).value.trim(); c.updatedAt=nowISO(); close(); render(); }; } });
+        c.title=v; c.titleAuto=false; c.subtitle=$('#rns',m).value.trim(); c.updatedAt=nowISO();
+        if(c.level==='nano' && c.content) c.content.title = v; // the lesson heading is the same name
+        close(); render(); }; } });
   const dl=$('[data-cdelete]');
   if(dl) dl.onclick = ()=>{
     const ups = usedBy(c.id);
@@ -3184,7 +3220,14 @@ function weekLesson(c, student){
       </div>
       <div class="callout scen mt16"><span class="ic">${ic('target')}</span>
         <div><b>Back to the Essential Question:</b> ${esc(d.essentialQuestion||'')}</div></div>
-      <div class="mt16" style="display:grid;gap:12px">
+      ${sm.activity && (sm.activity.instructions || (sm.activity.items||[]).length || (S.editing&&!student)) ? `<div class="card pad mt16" style="box-shadow:none;border:1px solid var(--line)">
+        <b class="small">${esc(sm.activity.name||sum.name)}</b>
+        <div class="small mt8">${E('summarizing.activity.instructions', sm.activity.instructions, 3)}</div>
+        ${S.editing&&!student ? `<div class="mt8">${EDL('summarizing.activity.items', sm.activity.items)}</div>`
+          : (sm.activity.items||[]).length ? `<div class="mt8" style="display:grid;gap:8px">${sm.activity.items.map((x,i)=>`<div><div class="small"><b>${i+1}.</b> ${esc(x)}</div>${student?`<textarea class="field mt8" rows="2" placeholder="Your answer"></textarea>`:''}</div>`).join('')}</div>` : ''}
+      </div>` : ''}
+      <div class="small muted mt16">${sm.activity ? 'Then the guided reflection, step by step.' : ''}</div>
+      <div class="mt12" style="display:grid;gap:12px">
         ${(sm.steps||[]).map((st,i)=>{
           const def = REFLECTION_STEPS.find(x=>x.id===st.id) || REFLECTION_STEPS[i] || {};
           return `<div class="card pad" style="background:var(--surface-2);box-shadow:none">
@@ -3403,7 +3446,7 @@ function studentBar(c){
       : 'A preview. Students see nothing until it is approved and published.'}</span></div>
     <div class="row gap" style="gap:8px">
       ${(()=>{ const t=S.trail||[], up=t.length?CRED(t[t.length-1]):null;
-        return up ? `<button class="btn sm" data-back data-keepstudent>${ic('arrowL')} ${esc(up.title||'Back')}</button>` : ''; })()}
+        return up ? `<button class="btn sm back" data-back data-keepstudent title="${esc(up.title||'Back')}">${ic('arrowL')} <span class="t">${esc(up.title||'Back')}</span></button>` : ''; })()}
       <button class="btn sm" data-wstudent>Back to editing</button>
     </div>
   </div>`;
@@ -3426,7 +3469,7 @@ function randomisedQuiz(list, seed){
   return shuffleWith(list||[], rnd).map(q=>{
     const pairs=(q.o||[]).map((text,i)=>({text, right:i===q.a}));
     // "All of the above" / "Both A and B" only make sense where they were written.
-    const pinned = pairs.some(x=>/\b(above|below|both|neither|none of|all of)\b|\b[A-D] and [A-D]\b/i.test(String(x.text)));
+    const pinned = pairs.some(x=>isCrossRef(x.text));
     const mixed = pinned ? pairs : shuffleWith(pairs, rnd);
     return { ...q, o:mixed.map(x=>x.text), a:mixed.findIndex(x=>x.right) };
   });
@@ -3579,6 +3622,7 @@ function bindNano(){
     if(!v) return;
     pushRevision(c, 'restored', c.content);
     c.content = JSON.parse(JSON.stringify(v.content));
+    if(c.title) c.content.title = c.title;   // the name stays; the content goes back
     c.updatedAt = c.contentAt = nowISO();
     toast('Restored'); render();
   });
@@ -3604,6 +3648,8 @@ function saveEdits(c){
     pushRevision(c, 'edited', now);
     c.content = now;
     c.updatedAt = c.contentAt = nowISO();
+    // One week, one name: the lesson heading is the credential's title.
+    if(String(c.content.title||'').trim() && c.content.title.trim() !== c.title){ c.title = c.content.title.trim(); c.titleAuto = false; }
     toast(`${touched} change${touched===1?'':'s'} saved`);
   }
 }
@@ -4371,7 +4417,7 @@ function restore(){
     const raw = localStorage.getItem(STORE_KEY); if(!raw) return;
     const d = JSON.parse(raw); if(!d || d.v!==1) return;
     S.creds = d.creds || [];
-    // Weeks written before answer positions were spread get them spread once (draft content only; a live version is not changed).
+    // Weeks written before answer positions were spread get them spread once. Only option positions move — never text or which answer is right.
     S.creds.forEach(c=>{
       if(c.content && !c.content.keysSpread && c.content.contentQuiz){ spreadKeys(c.content.vocabQuiz); spreadKeys(c.content.contentQuiz); c.content.keysSpread = true; }
       if(c.cumulative && !c.cumulative.keysSpread){ spreadKeys(c.cumulative.questions); c.cumulative.keysSpread = true; }
