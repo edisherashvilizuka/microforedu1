@@ -638,7 +638,7 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261110-1257';
+const BUILD_ID = '20261110-1318';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1998,7 +1998,7 @@ async function repairSummarizing(j, system, cred){
 Write the summarizing activity for Day 5 as a ${sum.name}: ${sum.blurb}
 Addressed to the student, 30-80 words, ready to use with no editing. If it needs concrete parts (questions, criteria), list them as items and do not repeat them in the instructions.
 Return JSON only: { "name": "${sum.name}", "instructions": "", "items": [] }` }));
-  if(out && out.instructions) sm.activity = { name: sum.name, instructions: String(out.instructions), items: Array.isArray(out.items) ? out.items.map(String) : [] };
+  if(out && out.instructions) sm.activity = tidyActivity({ name: sum.name, instructions: String(out.instructions), items: Array.isArray(out.items) ? out.items.map(String) : [] });
 }
 
 /* Labels that only steer rendering are mapped to the nearest known kind
@@ -2006,7 +2006,17 @@ Return JSON only: { "name": "${sum.name}", "instructions": "", "items": [] }` })
 const SCENE_ALIAS = { steps:'sequence', process:'sequence', procedure:'sequence', timeline:'sequence',
   table:'comparison', contrast:'comparison', 'compare':'comparison', cause:'cause-and-effect', effect:'cause-and-effect',
   diagram:'annotated-diagram', labeled:'annotated-diagram', mistake:'counter-example', 'non-example':'counter-example' };
+/* Models often write an activity's questions into its instructions as well
+   as listing them. When the items are listed, the instructions keep only the
+   lead-in before the numbered part. */
+function tidyActivity(a){
+  if(!a || !(a.items||[]).length || !a.instructions) return a;
+  const t = String(a.instructions), m = t.search(/(^|\s)(1[).:](?!\d)|\(1\))/);
+  if(m >= 0){ const lead = t.slice(0, m).trim().replace(/[:\s]+$/,''); a.instructions = (lead ? lead.replace(/[^.!?]$/, x=>x+':') : 'Answer each question below:'); }
+  return a;
+}
 function normalizeWeek(j){
+  if(j.summarizing && j.summarizing.activity) tidyActivity(j.summarizing.activity);
   ((j.video||{}).scenes||[]).forEach(s=>{
     const k = String(s.kind||'').toLowerCase().trim();
     s.kind = SCENE_KINDS.includes(k) ? k : (SCENE_ALIAS[k] || Object.keys(SCENE_ALIAS).filter(a=>k.includes(a)).map(a=>SCENE_ALIAS[a])[0] || 'sequence');
@@ -4458,6 +4468,7 @@ function restore(){
     S.creds.forEach(c=>{
       if(c.content && !c.content.keysSpread && c.content.contentQuiz){ spreadKeys(c.content.vocabQuiz); spreadKeys(c.content.contentQuiz); c.content.keysSpread = true; }
       if(c.badgePlan) reconcileBadgePlan(c.badgePlan);
+      if(c.content && c.content.summarizing && c.content.summarizing.activity) tidyActivity(c.content.summarizing.activity);
       if(c.cumulative && !c.cumulative.keysSpread){ spreadKeys(c.cumulative.questions); c.cumulative.keysSpread = true; }
     });
     S.people = d.people || []; S.user = d.user || null; S.quality = d.quality || S.quality;
