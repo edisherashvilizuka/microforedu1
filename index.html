@@ -628,7 +628,7 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261110-1117';
+const BUILD_ID = '20261110-1153';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1188,7 +1188,7 @@ function bindGlobal(){
     render();
   });
   const bk = $('[data-back]');
-  if(bk) bk.onclick = ()=>{ const up = S.trail.pop(); S.openId = up; S.weekTab='lesson'; S.editing=false; S.studentView=false; render(); };
+  if(bk) bk.onclick = ()=>{ const up = S.trail.pop(); S.openId = up; S.weekTab='lesson'; S.editing=false; S.studentView=bk.hasAttribute('data-keepstudent'); render(); };
   const so = $('[data-signout]');
   if(so) so.onclick = ()=>{ S.user = null; S.view='library'; S.create=null; S.studentView=false; S.trail=[]; render(); };
 }
@@ -1772,7 +1772,7 @@ Return JSON in exactly this shape:
                  "narration": "25-45 words the narrator says to the student, second person, explaining — never a description of the picture" }]
   },
   "vocabulary": [{ "term": "", "def": "one sentence, as the term is used in this reading" }],
-  "vocabQuiz":   [{ "stem": "", "o": ["","","",""], "a": 0, "why": "why the right answer is right" }],
+  "vocabQuiz":   [{ "stem": "", "o": ["","","",""], "a": 0, "why": "why the right answer is right — never refer to option letters" }],
   "contentQuiz": [{ "stem": "", "o": ["","","",""], "a": 0, "why": "",
                     "level": "Recall | Understanding | Application | Analysis" }],
   "extending": {
@@ -1893,7 +1893,9 @@ async function generateWeek(credId){
       await lengthenReading(j, p.system);
     }
     normalizeWeek(j);
+    await repairVisuals(j, p.system);
     await repairQuizzes(j, p.system);
+    spreadKeys(j.vocabQuiz); spreadKeys(j.contentQuiz); j.keysSpread = true;
     pushRevision(cred, 'generated', j);
     cred.content = j;
     if(isPlaceholderTitle(cred) && j.title){ cred.title = j.title; cred.titleAuto = true; }
@@ -1940,6 +1942,31 @@ Return JSON only: { "sections": [ { "heading": "", "body": "" } ] } — the same
   secs.forEach((s,i)=>{ const n=list[i]; if(n && n.body && String(n.body).split(/\s+/).length > String(s.body||'').split(/\s+/).length) s.body = n.body; });
 }
 
+/* A reading with fewer than two visual supports gets them added by a narrow
+   call: the reading itself is not touched. */
+async function repairVisuals(j, system){
+  const count = d => ((d.reading||{}).sections||[]).reduce((n,s)=>n+((s.visuals||[]).length),0);
+  if(count(j) >= 2) return;
+  busyStage('Adding visual supports to the reading');
+  const secs = (j.reading.sections||[]).map((s,i)=>`SECTION ${i}: ${s.heading}\n${s.body}`).join('\n\n').slice(0,9000);
+  const raw = await callModel({ system, maxTokens:3000, user:
+`This reading has no visual supports. Add three, each in the section where it genuinely helps.
+
+${secs}
+
+Kinds: ${VISUAL_KINDS.map(v=>v.id).join(', ')}. keypoint, workplace, mistake and decision use "body";
+table, steps and checklist use "items" (table rows as "cell | cell", first row the header). Use only facts
+already in the reading.
+
+Return JSON only: { "visuals": [ { "section": 0, "kind": "", "title": "short label", "body": "", "items": [] } ] }` });
+  const out = extractJSON(raw);
+  (out && out.visuals || []).forEach(v=>{
+    const sec = (j.reading.sections||[])[+v.section]; if(!sec || !v.kind) return;
+    (sec.visuals = sec.visuals || []).push({ kind:v.kind, title:v.title||'', body:v.body||undefined, items:(v.items||[]).length?v.items:undefined });
+  });
+  normalizeWeek(j);
+}
+
 /* Labels that only steer rendering are mapped to the nearest known kind
    rather than failing the week: a scene called "steps" is a sequence. */
 const SCENE_ALIAS = { steps:'sequence', process:'sequence', procedure:'sequence', timeline:'sequence',
@@ -1959,6 +1986,28 @@ function normalizeWeek(j){
   const L = Object.keys(COGNITIVE_MIX);
   (j.contentQuiz||[]).forEach(q=>{ const m = L.find(l=>l.toLowerCase()===String(q.level||'').toLowerCase().trim()); if(m) q.level = m; });
   [...(j.vocabQuiz||[]), ...(j.contentQuiz||[])].forEach(q=>{ q.a = +q.a||0; });
+}
+
+/* Models put the right answer first far too often (20 of 20 in one live
+   week). Students get a shuffled paper anyway, but the stored key is what a
+   reviewer reads, what gets printed or exported, and what the product keeps
+   if shuffling is ever switched off. The right option is
+   moved to a balanced, shuffled position — A to D used two or three times
+   each in ten. Option text moves with it, so the key stays correct. Options
+   that refer to each other ("all of the above", "both A and B") stay put. */
+function keyHash(s){ let h=2166136261; for(const ch of String(s)){ h^=ch.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function spreadKeys(list){
+  if(!Array.isArray(list) || !list.length) return list;
+  const slots = list.map((_,i)=>i%4);
+  let seed = keyHash(list.map(q=>q&&q.stem).join('|')) || 1;
+  for(let i=slots.length-1;i>0;i--){ seed = (Math.imul(seed,1103515245)+12345)>>>0; const r = seed%(i+1); [slots[i],slots[r]]=[slots[r],slots[i]]; }
+  list.forEach((q,i)=>{
+    if(!q || !Array.isArray(q.o) || q.o.length!==4) return;
+    if(q.o.some(o=>/\b(above|below|both|neither|none of|all of)\b|\b[A-D] and [A-D]\b/i.test(String(o)))) return;
+    const a = +q.a||0, t = slots[i]; if(a===t) return;
+    [q.o[a], q.o[t]] = [q.o[t], q.o[a]]; q.a = t;
+  });
+  return list;
 }
 
 /* The quiz rules are checked, not trusted. When the model misses the
@@ -2669,7 +2718,7 @@ function cumulativeQuiz(c, cu, student){
       <div class="mt8" style="display:grid;gap:6px">${(q.o||[]).map((o,j)=>`<button class="qopt ${st.picks[i]===j?'sel':''} ${st.checked&&j===q.a?'right':''} ${st.checked&&st.picks[i]===j&&j!==q.a?'wrong':''}"
         data-qpick="${esc(key)}" data-q="${i}" data-o="${j}" ${st.checked?'disabled':''}><b>${String.fromCharCode(65+j)}</b> ${esc(o)}</button>`).join('')}</div>
       ${st.checked&&q.why?`<div class="xs muted2 mt8">${esc(q.why)}</div>`:''}</div>`).join('')}
-      <div class="actbar"><span class="xs muted">${st.checked?`${score} of ${qs.length} right`:`${Object.keys(st.picks).length} of ${qs.length} answered`}</span>
+      <div class="actbar"><span class="xs muted">${st.checked?`${score} of ${qs.length} right${qs.length-Object.keys(st.picks).length?` · ${qs.length-Object.keys(st.picks).length} not answered`:''}`:`${Object.keys(st.picks).length} of ${qs.length} answered`}</span>
         <button class="btn ${st.checked?'':'primary'}" data-qcheck="${esc(key)}">${st.checked?'Try again':'Check my answers'}</button></div></div>`;
   }
   const open = !!S.cumOpen;
@@ -3304,7 +3353,7 @@ function assessmentBlock(d, student, id){
       </div>
       ${(!student || st.checked) && q.why?`<div class="xs muted2 mt8">${esc(q.why)}</div>`:''}
     </div>`).join('')}
-    ${student?`<div class="actbar"><span class="xs muted">${st.checked?`${score} of ${qs.length} right`:`${Object.keys(st.picks).length} of ${qs.length} answered`}</span>
+    ${student?`<div class="actbar"><span class="xs muted">${st.checked?`${score} of ${qs.length} right${qs.length-Object.keys(st.picks).length?` · ${qs.length-Object.keys(st.picks).length} not answered`:''}`:`${Object.keys(st.picks).length} of ${qs.length} answered`}</span>
       <button class="btn ${st.checked?'':'primary'}" data-qcheck="${esc(key)}">${st.checked?'Try again':'Check my answers'}</button></div>`:''}
     </div>`;
   };
@@ -3352,7 +3401,11 @@ function studentBar(c){
     <div><b>Student view</b> <span class="xs" style="opacity:.75;margin-left:8px">${live
       ? (c.live && c.status!=='published' ? 'The published version — your changes are not visible until approved.' : 'Exactly what a student sees.')
       : 'A preview. Students see nothing until it is approved and published.'}</span></div>
-    <button class="btn sm" data-wstudent>Back to editing</button>
+    <div class="row gap" style="gap:8px">
+      ${(()=>{ const t=S.trail||[], up=t.length?CRED(t[t.length-1]):null;
+        return up ? `<button class="btn sm" data-back data-keepstudent>${ic('arrowL')} ${esc(up.title||'Back')}</button>` : ''; })()}
+      <button class="btn sm" data-wstudent>Back to editing</button>
+    </div>
   </div>`;
 }
 function studentNano(c){
@@ -3372,7 +3425,9 @@ function randomisedQuiz(list, seed){
   const rnd = seeded(seed);
   return shuffleWith(list||[], rnd).map(q=>{
     const pairs=(q.o||[]).map((text,i)=>({text, right:i===q.a}));
-    const mixed=shuffleWith(pairs, rnd);
+    // "All of the above" / "Both A and B" only make sense where they were written.
+    const pinned = pairs.some(x=>/\b(above|below|both|neither|none of|all of)\b|\b[A-D] and [A-D]\b/i.test(String(x.text)));
+    const mixed = pinned ? pairs : shuffleWith(pairs, rnd);
     return { ...q, o:mixed.map(x=>x.text), a:mixed.findIndex(x=>x.right) };
   });
 }
@@ -3682,7 +3737,45 @@ Exactly ${n} questions. At least ${Math.max(2,Math.round(n/5))} must require com
 say so in "from". Wrong options plausible to somebody who half-learned it.`
     });
     const j = extractJSON(raw);
-    if(!j || !(j.questions||[]).length) throw new Error('The assessment came back unreadable. Nothing was changed.');
+    const valid = q => q && q.stem && Array.isArray(q.o) && q.o.length===4 && Number.isInteger(q.a) && q.a>=0 && q.a<4;
+    if(!j || !(j.questions||[]).filter(valid).length) throw new Error('The assessment came back unreadable. Nothing was changed.');
+    j.questions = j.questions.filter(valid);
+    if(j.questions.length < n){
+      busyStage('Adding the missing questions');
+      const more = extractJSON(await callModel({ system: SYS_WEEK, maxTokens: 4000, user:
+`${digest}
+
+These questions already exist:
+${j.questions.map((q,i)=>`${i+1}. ${q.stem}`).join('\n')}
+
+Write ${n-j.questions.length} more, different from these, same rules: answerable from the weeks, each naming its week in "from".
+Return JSON only: { "questions": [ { "stem": "", "o": ["","","",""], "a": 0, "why": "", "from": "" } ] }` }));
+      j.questions = j.questions.concat(((more||{}).questions||[]).filter(valid));
+    }
+    j.questions = j.questions.slice(0, n);
+    // Combining questions are what make it cumulative: enforce the minimum, replacing
+    // single-week questions from whichever week has the most.
+    const need = Math.max(2,Math.round(n/5));
+    const weeksOf = q => (String(q.from||'').match(/WEEK\s*\d+/gi)||[]).map(w=>w.toUpperCase().replace(/WEEK\s*/,'WEEK '));
+    const isMulti = q => new Set(weeksOf(q)).size > 1;
+    const have = j.questions.filter(isMulti).length;
+    if(have < need){
+      busyStage('Adding questions that combine weeks');
+      const more = extractJSON(await callModel({ system: SYS_WEEK, maxTokens: 3000, user:
+`${digest}
+
+Write ${need-have} question${need-have>1?'s':''} that can only be answered by combining what two different weeks above taught.
+Name both weeks in "from", e.g. "WEEK 1 + WEEK 3". Answerable from the weeks; nothing new.
+Return JSON only: { "questions": [ { "stem": "", "o": ["","","",""], "a": 0, "why": "", "from": "" } ] }` }));
+      const add = ((more||{}).questions||[]).filter(q=>valid(q) && isMulti(q)).slice(0, need-have);
+      add.forEach(q=>{
+        const tally = {}; j.questions.forEach(x=>{ if(!isMulti(x)) weeksOf(x).forEach(w=>tally[w]=(tally[w]||0)+1); });
+        const top = Object.keys(tally).sort((a,b)=>tally[b]-tally[a])[0];
+        let idx = -1; for(let i=j.questions.length-1;i>=0;i--){ const x=j.questions[i]; if(!isMulti(x) && weeksOf(x).includes(top)){ idx=i; break; } }
+        if(idx>=0) j.questions[idx] = q; else if(j.questions.length < n) j.questions.push(q);
+      });
+    }
+    spreadKeys(j.questions); j.keysSpread = true;
     j.basis = cumulativeBasis(c); j.builtAt = nowISO();
     c.cumulative = j; c.updatedAt = nowISO();
     toast(`${j.questions.length} questions across ${weeks.length} weeks`);
@@ -3792,8 +3885,8 @@ function blockers(c){
   const weeks = weeksBeneath(c);
   const unwritten = weeks.filter(k=>!k.content).length;
   if(unwritten) out.push(`${unwritten} week${unwritten===1?'':'s'} inside ${unwritten===1?'has':'have'} not been written.`);
-  const failing = weeks.filter(k=>k.content && weekChecks(k.content).some(x=>!x.ok)).length;
-  if(failing) out.push(`${failing} week${failing===1?' has':'s have'} failing checks.`);
+  const failing = weeks.filter(k=>k.content && weekChecks(k.content).some(x=>!x.ok));
+  if(failing.length) out.push(`Failing checks in ${failing.map(k=>`“${k.title}”${canEdit(k)?'':` (owned by ${k.createdBy||'someone else'})`}`).join(', ')}.`);
   if(!c.cumulative) out.push('There is no cumulative assessment.');
   else if(cumulativeStale(c)) out.push('The cumulative assessment is out of date — the weeks changed after it was built.');
   if(c.level==='badge'){
@@ -3936,7 +4029,8 @@ function viewReview(){
                 ${c.subCluster?`<span class="pill xs">${esc(c.subCluster)}</span>`:''}
               </div>
               <b class="mt8" style="display:block;font-size:15.5px">${esc(c.title)}</b>
-              <div class="xs muted mt4">Submitted by ${esc((c.history||[]).slice(-1)[0]&&(c.history||[]).slice(-1)[0].by||c.createdBy||'')}
+              <div class="xs muted mt4">${(()=>{ const h=(c.history||[]).slice(-1)[0]||{}, by=h.by||c.createdBy||'';
+                  return `Submitted by ${esc(by)}${h.note&&/^with /.test(h.note)?` ${esc(h.note.replace(/^with /,'with “'))}”`:''}${c.createdBy&&c.createdBy!==by?` · written by ${esc(c.createdBy)}`:''}`; })()}
                 ${c.level==='nano'&&c.content?` · ${checksPassed(c.content)} of ${checksTotal(c.content)} checks passed`:''}</div>
               ${stop.length?`<div class="xs mt8" style="color:var(--rose)">${esc(stop[0])}</div>`:''}
             </div>
@@ -4276,7 +4370,13 @@ function restore(){
   try{
     const raw = localStorage.getItem(STORE_KEY); if(!raw) return;
     const d = JSON.parse(raw); if(!d || d.v!==1) return;
-    S.creds = d.creds || []; S.people = d.people || []; S.user = d.user || null; S.quality = d.quality || S.quality;
+    S.creds = d.creds || [];
+    // Weeks written before answer positions were spread get them spread once (draft content only; a live version is not changed).
+    S.creds.forEach(c=>{
+      if(c.content && !c.content.keysSpread && c.content.contentQuiz){ spreadKeys(c.content.vocabQuiz); spreadKeys(c.content.contentQuiz); c.content.keysSpread = true; }
+      if(c.cumulative && !c.cumulative.keysSpread){ spreadKeys(c.cumulative.questions); c.cumulative.keysSpread = true; }
+    });
+    S.people = d.people || []; S.user = d.user || null; S.quality = d.quality || S.quality;
     if(d.menus) Object.keys(d.menus).forEach(k=>{ if(Array.isArray(d.menus[k]) && d.menus[k].length) MENUS[k] = d.menus[k]; });
     if(Array.isArray(d.standards) && d.standards.length) ALL_STANDARDS.splice(0, ALL_STANDARDS.length, ...d.standards);
     (d.taxEdits||[]).forEach(e=>{ if(subCluster(e.from)) applyTaxEdit(e.from, e); });
