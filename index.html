@@ -581,7 +581,7 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
 .vcheck{list-style:none;margin:8px 0 0;padding:0}
 .vcheck li{display:flex;gap:8px;align-items:flex-start;margin-bottom:5px}
 .vcheck li:before{content:"";flex:none;width:14px;height:14px;border:1.5px solid currentColor;border-radius:3px;margin-top:4px;opacity:.7}
-.studentbar{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;border-radius:var(--r-lg);
+.studentbar{position:sticky;top:calc(var(--nav-h) + 8px);z-index:50;background:var(--ink);color:#fff;border-radius:var(--r-lg);
   padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 .studentbar .btn{background:#fff;color:var(--ink)}
 .qopt{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
@@ -628,7 +628,7 @@ label.lbl{display:block; font-size:13px; font-weight:600; color:var(--ink-2); ma
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261110-1047';
+const BUILD_ID = '20261110-1059';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1755,7 +1755,9 @@ Return JSON in exactly this shape:
   "video": {
     "title": "what the video shows",
     "scenes": [{ "kind": "one of: ${SCENE_KINDS.join(' | ')}",
-                 "caption": "3-6 words", "narration": "25-45 words spoken over this scene" }]
+                 "caption": "3-6 words shown on screen",
+                 "shows": "what is drawn, one sentence",
+                 "narration": "25-45 words the narrator says to the student, second person, explaining — never a description of the picture" }]
   },
   "vocabulary": [{ "term": "", "def": "one sentence, as the term is used in this reading" }],
   "vocabQuiz":   [{ "stem": "", "o": ["","","",""], "a": 0, "why": "why the right answer is right" }],
@@ -1825,8 +1827,12 @@ function weekChecks(d){
   const mix = {}; (d.contentQuiz||[]).forEach(q=>{ mix[q.level]=(mix[q.level]||0)+1; });
   const mixOk = Object.keys(COGNITIVE_MIX).every(k=>mix[k]===COGNITIVE_MIX[k]);
   const vocabTerms = new Set((d.vocabulary||[]).map(v=>String(v.term||'').toLowerCase()));
-  const vocabTested = (d.vocabQuiz||[]).filter(q =>
-    [...vocabTerms].some(t => t && String(q.stem||'').toLowerCase().includes(t))).length;
+  /* A vocabulary question tests a listed term if the term is in the question
+     or is the right answer ("Which term means…? → Pulse"). */
+  const vocabTested = (d.vocabQuiz||[]).filter(q => {
+    const hay = (String(q.stem||'') + ' ' + String((q.o||[])[q.a]||'')).toLowerCase();
+    return [...vocabTerms].some(t => t && hay.includes(t));
+  }).length;
   const badStd = (((d.plan||{}).standards)||[]).filter(s=>!standardByCode(s.code)).length;
   const visuals = ((d.reading&&d.reading.sections)||[])
     .reduce((n,s)=>n+((s.visuals||[]).length),0);
@@ -1874,6 +1880,7 @@ async function generateWeek(credId){
       busyStage(`Lengthening the reading to 900–1,100 words (now ${readingWords(j)})`);
       await lengthenReading(j, p.system);
     }
+    await repairQuizzes(j, p.system);
     pushRevision(cred, 'generated', j);
     cred.content = j;
     if(isPlaceholderTitle(cred) && j.title){ cred.title = j.title; cred.titleAuto = true; }
@@ -1918,6 +1925,38 @@ Return JSON only: { "sections": [ { "heading": "", "body": "" } ] } — the same
   const list = out && (out.sections || (Array.isArray(out)?out:null));
   if(!list) return;
   secs.forEach((s,i)=>{ const n=list[i]; if(n && n.body && String(n.body).split(/\s+/).length > String(s.body||'').split(/\s+/).length) s.body = n.body; });
+}
+
+/* The quiz rules are checked, not trusted. When the model misses the
+   3/3/2/2 spread or tests words that are not on the list, a narrow second
+   call rewrites only that quiz; the rewrite is kept only if it is better. */
+function mixOff(list){ const m={}; (list||[]).forEach(q=>{ m[q.level]=(m[q.level]||0)+1; });
+  return Object.keys(COGNITIVE_MIX).reduce((n,k)=>n+Math.abs((m[k]||0)-COGNITIVE_MIX[k]),0) + Math.abs((list||[]).length-10); }
+function vocabMiss(d, list){ const terms=(d.vocabulary||[]).map(v=>String(v.term||'').toLowerCase());
+  return 10 - (list||[]).filter(q=>{ const h=(String(q.stem||'')+' '+String((q.o||[])[q.a]||'')).toLowerCase(); return terms.some(t=>t&&h.includes(t)); }).length; }
+async function repairQuizzes(j, system){
+  const fixOne = async (key, ask, score) => {
+    for(let tries=0; tries<2 && score(j[key])>0; tries++){
+      busyStage(ask.stage);
+      const raw = await callModel({ system, maxTokens:6000, user: ask.user });
+      const out = extractJSON(raw); const list = out && (out[key] || (Array.isArray(out)?out:null));
+      if(Array.isArray(list) && list.length===10 && list.every(q=>q && q.stem && (q.o||[]).length===4 && q.a>=0 && q.a<4)
+         && score(list) < score(j[key])) j[key] = list;
+    }
+  };
+  const reading = (j.reading.sections||[]).map(s=>s.heading+': '+s.body).join('\n\n').slice(0,9000);
+  await fixOne('contentQuiz', { stage:'Rebalancing the content questions to 3 / 3 / 2 / 2',
+    user:`Reading:\n${reading}\n\nCurrent questions:\n${JSON.stringify(j.contentQuiz)}\n\nRewrite these into exactly 10 questions on this reading:
+exactly ${COGNITIVE_MIX.Recall} Recall, ${COGNITIVE_MIX.Understanding} Understanding, ${COGNITIVE_MIX.Application} Application, ${COGNITIVE_MIX.Analysis} Analysis,
+mixed through the set. The level must be true of the question, not just a label: Application puts the student in a new workplace
+situation; Analysis asks them to compare, diagnose or judge. Keep the questions that already fit. Wrong options plausible.
+Return JSON only: { "contentQuiz": [ { "stem":"", "o":["","","",""], "a":0, "why":"", "level":"Recall | Understanding | Application | Analysis" } ] }` },
+    l=>mixOff(l));
+  await fixOne('vocabQuiz', { stage:'Making every vocabulary question test a listed term',
+    user:`Vocabulary list:\n${(j.vocabulary||[]).map(v=>v.term+' — '+v.def).join('\n')}\n\nWrite exactly 10 vocabulary questions, one per term above, each naming
+its term in the question or having the term as the right answer. Wrong options are other terms or plausible misreadings.
+Return JSON only: { "vocabQuiz": [ { "stem":"", "o":["","","",""], "a":0, "why":"" } ] }` },
+    l=>vocabMiss(j, l));
 }
 
 /* ---------- long-running work ---------- */
@@ -2423,7 +2462,7 @@ function credHeader(c, extra){
       <div class="stack" style="gap:8px;align-items:flex-end">
         <span class="pill">${want>1?`${have} of ${want} weeks`:'1 week'}</span>
         <span class="xs muted2">Updated ${esc((c.updatedAt||'').slice(0,10))}${c.createdBy?` · by ${esc(c.createdBy)}`:''}</span>
-        ${canEdit(c)?`<div class="row gap" style="gap:6px">
+        ${canEdit(c) && !S.busy?`<div class="row gap" style="gap:6px">
           ${!isLocked(c)?`<button class="btn sm" data-crename>Rename</button>`:''}
           ${c.status==='draft' && !c.live?`<button class="btn sm" data-cdelete>Delete</button>`:''}
         </div>`:''}
@@ -3800,7 +3839,7 @@ function moveTo(c, to, label, quiet){
     c.history.push({ to:'draft', label:'Changes started', by, at:nowISO(), note:'published version stays live' });
   } else {
     c.status = to;
-    c.history.push({ to, label, by, at: nowISO() });
+    c.history.push({ to, label: STATUS(to).label, by, at: nowISO() });
     if(to==='published'){ c.publishedAt = nowISO(); c.live = null; }
     if(to==='approved')  c.approvedBy  = by;
     if(to==='review')    c.submittedBy = by;
@@ -3820,7 +3859,8 @@ function moveTo(c, to, label, quiet){
       }
     });
   }
-  if(!quiet){ toast(`${esc(c.title)} — ${esc((label||STATUS(c.status).label).toLowerCase())}`); render(); }
+  const said = to==='unpublished' ? 'unpublished' : (c.status==='draft' && c.live) ? 'new draft started; the published version stays live' : STATUS(c.status).label.toLowerCase();
+  if(!quiet){ toast(`${esc(c.title)} — ${esc(said)}`); render(); }
 }
 function bindWorkflow(c){
   $$('[data-move]').forEach(b=> b.onclick = ()=> moveTo(c, b.dataset.move, b.dataset.movelabel));
