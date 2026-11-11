@@ -664,7 +664,7 @@ table.rubric tbody th{background:var(--surface-2);font-weight:600;white-space:no
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261111-1003';
+const BUILD_ID = '20261111-1017';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1961,8 +1961,19 @@ const isSituated = q => {
   const setup = sentences.slice(0, -1).join(' ');
   const actor = /\b(you|your|a|an|the|their|his|her)\b|\b[A-Z][a-z]+\b/;
   if(words(setup) >= 8 && actor.test(setup)) return true;
+  // One sentence that opens with what happened: "If an employee clicks…, what…", "When a patient…, which…".
+  const lead = (t.match(/^(if|when|after|while|during|before)\s+([^,?]+),/i)||[])[2] || '';
+  if(words(lead) >= 6 && actor.test(lead)) return true;
   return words(t) >= 16 && /\b(you|your|a|an|the)\s+[a-z-]+\s+(is|are|was|were|has|have|notices?|finds?|sees?|receives?|arrives?|reports?|asks?)\b|\b(you are|you work|you find|you notice|you receive|you discover)\b/i.test(t);
 };
+
+/* The Reflection Post carries the chosen summarizing strategy in its
+   "Apply What You Learned" step (the default discussion post needs nothing). */
+function reflectionShaped(sm){
+  if(!sm || !sm.strategy) return true;
+  const st = (sm.steps||[]).find(x=>x.id==='apply');
+  return !!st && String(st.prompt||'').toLowerCase().includes(String(sm.strategy).toLowerCase());
+}
 
 /* Program Maps — the district's 1–10 weighting of academic courses for a
    cluster, grouped by the four badge strands. */
@@ -2164,8 +2175,9 @@ The district's forms are fixed; these choices shape the content inside them:
   the student to commit to. Do not add any other section.
 - The deliverable must BE a "${del.name}".
 - Summarizing is always the Reflection Post (the five steps, then the open question) followed by two
-  peer responses. Shape it as a "${sum.name}": work that into the step prompts, above all "Apply What
-  You Learned" and "Extend Your Thinking". Do not add a separate activity.
+  peer responses. Shape it as a "${sum.name}" (${sum.blurb}): the "Apply What You Learned" step IS the
+  ${sum.name} — it asks for it by name and spells out exactly what to write — and the other steps lead
+  into it. Do not add a separate activity or section.
 
 Return JSON in exactly this shape:
 
@@ -2307,6 +2319,8 @@ function weekChecks(d){
       label:'Deliverable says what to use and submit' },
     { ok: ((d.summarizing||{}).steps||[]).length===REFLECTION_STEPS.length,
       label:'Reflection walks all five steps', detail:`${((d.summarizing||{}).steps||[]).length} of ${REFLECTION_STEPS.length}` },
+    ...((d.summarizing||{}).strategy ? [{ ok: reflectionShaped(d.summarizing), label:`Reflection shaped as a ${d.summarizing.strategy}`,
+      detail: reflectionShaped(d.summarizing) ? '' : 'Apply What You Learned is generic' }] : []),
     { ok: badStd===0, label:'Every standard cited exists', detail: badStd?`${badStd} unknown or CDOS in the plan`:'' },
     ...(standardsOf('state').length ? [{ ok: ((d.plan||{}).standards||[]).length>0, label:'NYS Next Generation standards in the plan' }] : []),
     ...teacherNotesChecks(d),
@@ -2349,6 +2363,7 @@ async function generateWeek(credId){
     j.videoOn = !!cred.videoGen;
     normalizeWeek(j);
     await repairVisuals(j, p.system);
+    await repairReflectionStrategy(j, p.system, cred);
     await repairVocabInReading(j, p.system);
     await repairQuizzes(j, p.system);
     await repairDistractors(j, p.system);
@@ -2441,6 +2456,31 @@ Write the summarizing activity for Day 5 as a ${sum.name}: ${sum.blurb}
 Addressed to the student, 30-80 words, ready to use with no editing. If it needs concrete parts (questions, criteria), list them as items and do not repeat them in the instructions.
 Return JSON only: { "name": "${sum.name}", "instructions": "", "items": [] }` }));
   if(out && out.instructions) sm.activity = tidyActivity({ name: sum.name, instructions: String(out.instructions), items: Array.isArray(out.items) ? out.items.map(String) : [] });
+}
+
+/* Decided (d10): the summarizing strategy shapes the Reflection Post, and the
+   "Apply What You Learned" step carries it. Models tend to leave that step
+   generic, so a narrow call rewrites only that step when it does not. */
+async function repairReflectionStrategy(j, system, cred){
+  const sum = pickOf('summarizing', (cred.strategies||{}).summarizing);
+  const sm = j.summarizing = j.summarizing || {};
+  sm.strategy = sum.id==='discussion' ? '' : sum.name;
+  if(reflectionShaped(sm)) return;
+  const st = (sm.steps||[]).find(x=>x.id==='apply'); if(!st) return;
+  busyStage(`Shaping the reflection as a ${sum.name.toLowerCase()}`);
+  for(let tries=0; tries<2 && !reflectionShaped(sm); tries++){
+    const out = extractJSON(await callModel({ system, maxTokens:800, user:
+`The week's opening scenario: ${String((j.activating||{}).scenario||'').slice(0,700)}
+Essential Question: ${j.essentialQuestion||''}
+The reflection step "Apply What You Learned" currently reads:
+"${st.prompt||''}"
+
+Rewrite it as a ${sum.name}: ${sum.blurb}
+Name the ${sum.name} in the first sentence, say exactly what the student writes and how much, refer to the actual scenario and role,
+and ask for evidence from the reading. 40-90 words, addressed to the student as "you".
+Return JSON only: { "prompt": "" }` }));
+    if(out && out.prompt && String(out.prompt).toLowerCase().includes(sum.name.toLowerCase())) st.prompt = String(out.prompt).trim();
+  }
 }
 
 /* 3.9 — a vocabulary term that never appears in the reading gets one
@@ -2696,6 +2736,7 @@ Return JSON only: { ${KEYS.map(k=>`"${k}": …`).join(', ')} }` });
     if(part==='reading'){ await repairVisuals(j, p.system); await repairVocabInReading(j, p.system); }
     if(part==='assessment' || part==='reading'){ await repairQuizzes(j, p.system); await repairDistractors(j, p.system); spreadKeys(j.vocabQuiz); spreadKeys(j.contentQuiz); }
     if(part==='extending') await repairDeliverable(j, p.system);
+    if(part==='summarizing') await repairReflectionStrategy(j, p.system, cred);
     j.title = cred.title;
     pushRevision(cred, 'edited', j);
     cred.content = j; cred.updatedAt = cred.contentAt = nowISO();
@@ -4132,7 +4173,7 @@ function weekLesson(c, student){
         ${(sm.steps||[]).map((st,i)=>{
           const def = REFLECTION_STEPS.find(x=>x.id===st.id) || REFLECTION_STEPS[i] || {};
           return `<div class="card pad" style="background:var(--surface-2);box-shadow:none">
-            <b class="small">${esc(def.name||st.id||'')}</b>
+            <b class="small">${esc(def.name||st.id||'')}${st.id==='apply' && sm.strategy ? ` <span class="pill xs" style="margin-left:6px">${esc(sm.strategy)}</span>` : ''}</b>
             <div class="small mt8">${E('summarizing.steps.'+i+'.prompt', st.prompt, 4)}</div>
             ${student?`<textarea class="field mt8" rows="2" placeholder="Your response"></textarea>`:''}
           </div>`;
@@ -4528,7 +4569,7 @@ function lessonDoc(c){
     e.submit?`<p><b>What to submit:</b> ${esc(e.submit)}</p>`:'', H(4,'Success criteria'), UL(e.success), H(4,'Common mistakes'), UL(e.mistakes),
     `<p><b>Estimated time:</b> about ${esc(String(e.minutes||60))} minutes</p>`, H(4,'Performance Rubric'), rub,
     H(2,'Summarizing'), sm.activity&&sm.activity.instructions?`<p><b>${esc(sm.activity.name||'')}:</b> ${esc(sm.activity.instructions)}</p>${OL(sm.activity.items)}`:'',
-    H(4,'Reflection Post'), (sm.steps||[]).map((st,i)=>`<p><b>${esc((REFLECTION_STEPS.find(x=>x.id===st.id)||REFLECTION_STEPS[i]||{}).name||'')}</b><br>${esc(st.prompt||'')}</p>`).join(''),
+    H(4,'Reflection Post'), (sm.steps||[]).map((st,i)=>`<p><b>${esc((REFLECTION_STEPS.find(x=>x.id===st.id)||REFLECTION_STEPS[i]||{}).name||'')}${st.id==='apply'&&sm.strategy?' — '+esc(sm.strategy):''}</b><br>${esc(st.prompt||'')}</p>`).join(''),
     sm.openQuestion?`<p><i>${esc(sm.openQuestion)}</i></p>`:'',
     H(4,`Peer Responses — respond to ${(sm.peer||{}).count||2} classmates`), UL((sm.peer||{}).rules||PEER_RULES)
   ].join('\n');
