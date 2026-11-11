@@ -664,7 +664,7 @@ table.rubric tbody th{background:var(--surface-2);font-weight:600;white-space:no
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261111-1017';
+const BUILD_ID = '20261111-1047';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1959,7 +1959,8 @@ const isSituated = q => {
   const words = x => x.split(/\s+/).filter(Boolean).length;
   const sentences = t.match(/[^.?!]+[.?!]+(\s|$)|[^.?!]+$/g) || [t];
   const setup = sentences.slice(0, -1).join(' ');
-  const actor = /\b(you|your|a|an|the|their|his|her)\b|\b[A-Z][a-z]+\b/;
+  // An article or person word in any case ("A manager…"), or a name after the first word ("…when Maria…").
+  const actor = { test: x => /\b(you|your|a|an|the|their|his|her|our|my)\b/i.test(x) || /\s[A-Z][a-z]+\b/.test(' '+x.split(/\s+/).slice(1).join(' ')) };
   if(words(setup) >= 8 && actor.test(setup)) return true;
   // One sentence that opens with what happened: "If an employee clicks…, what…", "When a patient…, which…".
   const lead = (t.match(/^(if|when|after|while|during|before)\s+([^,?]+),/i)||[])[2] || '';
@@ -2296,7 +2297,7 @@ function weekChecks(d){
   const notInReading = vocabNotInReading(d), cover = vocabAnswerCoverage(d);
   const higherQs = (d.contentQuiz||[]).filter(q=>q.level==='Application'||q.level==='Analysis');
   const higher = higherQs.length, situated = higherQs.filter(isSituated).length;
-  const longV = longestCorrect(d.vocabQuiz), longC = longestCorrect(d.contentQuiz), reused = reusedOptions(d.contentQuiz);
+  const vso = vocabStandsOut(d), longV = vso.avoidable, longC = longestCorrect(d.contentQuiz), reused = reusedOptions(d.contentQuiz);
   return [
     { ok: words>=900 && words<=1100, label:'Reading is 900–1,100 words', detail:`${words} words` },
     { ok: visuals>=2 && visuals<=8,  label:'Visual supports used',       detail:`${visuals} across the reading` },
@@ -2314,7 +2315,7 @@ function weekChecks(d){
       detail: notInReading.length ? `missing: ${notInReading.slice(0,3).join(', ')}${notInReading.length>3?'…':''}` : '' },
     { ok: cover.once===cover.total && cover.total===10, label:'Each term is the right answer once', detail:`${cover.once} of ${cover.total}` },
     { ok: longV<=LONGEST_LIMIT && longC<=LONGEST_LIMIT && reused===0, label:'Right answers don’t stand out',
-      detail: `longest is right ${longV}/10 vocab · ${longC}/10 content${reused?` · ${reused} wrong option reused`:''}` },
+      detail: `longest is right ${longV}/10 vocab · ${longC}/10 content${vso.unavoidable?` · ${vso.unavoidable} vocab unavoidable with these terms`:''}${reused?` · ${reused} wrong option reused`:''}` },
     { ok: (((d.extending||{}).materials)||[]).length>0 && String((d.extending||{}).submit||'').trim().length>10,
       label:'Deliverable says what to use and submit' },
     { ok: ((d.summarizing||{}).steps||[]).length===REFLECTION_STEPS.length,
@@ -2401,7 +2402,7 @@ function readingWords(d){
 }
 async function lengthenReading(j, system, level){
   const secs = j.reading.sections;
-  const per = Math.round(1000/Math.max(1,secs.length));
+  const per = Math.round(1040/Math.max(1,secs.length));   // aim above 1,000: models land short
   const raw = await callModel({ system, maxTokens: 9000, user:
 `This is the technical reading of a week of instruction. It is ${readingWords(j)} words; the district requires 900-1,100.
 
@@ -2486,19 +2487,29 @@ Return JSON only: { "prompt": "" }` }));
 /* 3.9 — a vocabulary term that never appears in the reading gets one
    sentence added where it belongs; nothing else in the reading changes. */
 async function repairVocabInReading(j, system){
-  const missing = vocabNotInReading(j); if(!missing.length) return;
-  busyStage(`Working ${missing.length} vocabulary term${missing.length>1?'s':''} into the reading`);
-  const secs = (j.reading.sections||[]).map((s,i)=>`SECTION ${i}: ${s.heading}\n${s.body}`).join('\n\n').slice(0,9000);
-  const out = extractJSON(await callModel({ system, maxTokens:2500, user:
+  const secsOf = () => (j.reading.sections||[]);
+  for(let tries=0; tries<2; tries++){
+    const missing = vocabNotInReading(j); if(!missing.length) return;
+    busyStage(`Working ${missing.length} vocabulary term${missing.length>1?'s':''} into the reading`);
+    const secs = secsOf().map((s,i)=>`SECTION ${i}: ${s.heading}\n${s.body}`).join('\n\n').slice(0,9000);
+    const out = extractJSON(await callModel({ system, maxTokens:2500, user:
 `These vocabulary terms are in the week's list but never appear in the reading:
 ${missing.map(t=>'- '+t+' — '+(((j.vocabulary||[]).find(v=>v.term===t)||{}).def||'')).join('\n')}
 
 ${secs}
 
-For each term, write ONE sentence that uses the term exactly as written and fits naturally at the end of the most relevant section.
+For each term, write ONE sentence that uses the term exactly as written and fits naturally at the end of the most relevant section
+(sections are numbered from 0 to ${Math.max(0,secsOf().length-1)}).
 Return JSON only: { "add": [ { "section": 0, "term": "", "sentence": "" } ] }` }));
-  ((out||{}).add||[]).forEach(a=>{ const sec=(j.reading.sections||[])[+a.section];
-    if(sec && a.sentence && termRe(a.term||'').test(a.sentence)) sec.body = String(sec.body||'').trim()+' '+String(a.sentence).trim(); });
+    /* Matched on the sentence, not on what the model says it did: each missing
+       term goes in once, into the section named, or the last one if that is out of range. */
+    const adds = (out||{}).add || [];
+    missing.forEach(t=>{
+      const a = adds.find(x=>x && x.sentence && termRe(t).test(String(x.sentence))); if(!a) return;
+      const n = Number.isInteger(+a.section) && secsOf()[+a.section] ? +a.section : secsOf().length-1;
+      const sec = secsOf()[n]; if(sec) sec.body = String(sec.body||'').trim()+' '+String(a.sentence).trim();
+    });
+  }
 }
 
 /* 3.13 — options rewritten where the right answer stands out by length, or a
@@ -2515,8 +2526,35 @@ function reusedAt(list){
   const seen = {}; (list||[]).forEach((q,i)=>(q.o||[]).forEach((o,k)=>{ if(k!==q.a){ const n=norm(o); (seen[n]=seen[n]||[]).push(i); } }));
   return Object.values(seen).filter(v=>v.length>1).flatMap(v=>v.slice(1));
 }
+/* Vocabulary options must be the week's own terms, so the right term can only
+   be evened out by choosing other terms of similar length. Done without the
+   model: the shortest wrong option is swapped for a longer unused term while
+   the right one still stands out. The right answer never moves. */
+function evenVocabOptions(d){
+  const terms = (d.vocabulary||[]).map(v=>v.term);
+  (d.vocabQuiz||[]).forEach(q=>{
+    if(!Array.isArray(q.o) || q.o.length!==4) return;
+    for(let guard=0; guard<3 && optionStandsOut(q); guard++){
+      const right = q.o[q.a], used = new Set(q.o);
+      const spare = terms.filter(t=>!used.has(t) && t!==right).sort((a,b)=>b.length-a.length)[0];
+      const w = q.o.map((_,k)=>k).filter(k=>k!==q.a).sort((a,b)=>String(q.o[a]).length-String(q.o[b]).length)[0];
+      if(!spare || spare.length <= String(q.o[w]).length) break;
+      q.o[w] = spare;
+    }
+  });
+}
+/* A vocabulary answer that stands out only counts against the week when a
+   longer unused term was available; with these terms it might be unavoidable. */
+function vocabStandsOut(d){
+  const terms = (d.vocabulary||[]).map(v=>v.term); let avoidable = 0, unavoidable = 0;
+  (d.vocabQuiz||[]).forEach(q=>{ if(!optionStandsOut(q)) return;
+    const used = new Set(q.o||[]), minWrong = Math.min(...(q.o||[]).filter((_,k)=>k!==q.a).map(o=>String(o).length));
+    if(terms.some(t=>!used.has(t) && t.length>minWrong)) avoidable++; else unavoidable++; });
+  return { avoidable, unavoidable };
+}
 async function repairDistractors(j, system){
-  for(const key of ['contentQuiz','vocabQuiz']){
+  evenVocabOptions(j);
+  for(const key of ['contentQuiz']){
     for(let tries=0; tries<2; tries++){
       const list = j[key]||[]; const reuse = key==='contentQuiz' ? reusedOptions(list) : 0;
       if(longestCorrect(list) <= LONGEST_LIMIT && !reuse) break;
@@ -2542,7 +2580,8 @@ Return JSON only: { "questions": [ { "i": 0, "o": ["","","",""] } ] }` }));
         if(!optionStandsOut(cand) || (optionStandsOut(q) && !optionStandsOut(cand))){ next[+r.i] = cand; changed++; }
       });
       const score = l => longestCorrect(l) + (key==='contentQuiz'?reusedOptions(l):0);
-      if(!changed || score(next) >= score(list) || (key==='vocabQuiz' && vocabMiss(j,next) > vocabMiss(j,list))) break;
+      // No better this time: keep what we had and try once more (answers vary run to run).
+      if(!changed || score(next) >= score(list)) continue;
       j[key] = next;
     }
   }
