@@ -57,6 +57,7 @@ h1,h2,h3,h4,h5{margin:0; font-family:var(--fd); font-weight:500; letter-spacing:
 h1{font-size:34px} h2{font-size:24px} h3{font-size:18px} h4{font-size:15.5px} h5{font-size:13.5px}
 p{margin:0 0 12px}
 a{color:var(--ink); text-decoration:none}
+.contentbox a[href], .card .small a[href], .callout a[href]{color:var(--brand-700);text-decoration:underline;text-underline-offset:2px}
 button,input,textarea,select{font-family:inherit; font-size:inherit; color:inherit}
 button{cursor:pointer; border:0; background:none}
 b,strong{font-weight:600}
@@ -659,12 +660,14 @@ table.rubric tbody th{background:var(--surface-2);font-weight:600;white-space:no
 .vflow i{font-style:normal;color:var(--muted)}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 @media (max-width:760px){ .grid3{grid-template-columns:1fr} }
+
+.field.invalid{border-color:var(--rose,#c2410c);box-shadow:0 0 0 3px rgba(194,65,12,.12)}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261111-1047';
+const BUILD_ID = '20261111-1241';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -971,10 +974,10 @@ const CDOS = [
 const CDOS_3A = [
   { code:'CDOS 3a — Basic Skills',         desc:'Reading, writing, listening, speaking and applying mathematics to solve a problem.' },
   { code:'CDOS 3a — Thinking Skills',      desc:'Using ideas and information to make decisions and solve problems in the course of a task.' },
-  { code:'CDOS 3a — Personal Qualities',   desc:'Responsibility, self-management and the behaviour an employer relies on being there.' },
+  { code:'CDOS 3a — Personal Qualities',   desc:'Responsibility, self-management and the behavior an employer relies on being there.' },
   { code:'CDOS 3a — Interpersonal Skills', desc:'Working with people of different ages, roles and backgrounds.' },
   { code:'CDOS 3a — Technology',           desc:'Selecting and using the technology a task actually requires.' },
-  { code:'CDOS 3a — Managing Information', desc:'Recognising what information is needed, obtaining it and using it to decide.' },
+  { code:'CDOS 3a — Managing Information', desc:'Recognizing what information is needed, obtaining it and using it to decide.' },
   { code:'CDOS 3a — Managing Resources',   desc:'Allocating the time, materials and effort a task needs.' },
   { code:'CDOS 3a — Systems',              desc:'Understanding how a system works and where to act within it.' }
 ];
@@ -1362,7 +1365,7 @@ const API_VER   = '2023-06-01';
    `direct` is only used on the one route that talks to Anthropic straight
    from the browser, which needs a real model name. */
 const MODELS = [
-  { id:'best',     name:'Best judgement', note:'Strongest on path design',     direct:'claude-opus-5' },
+  { id:'best',     name:'Best judgment', note:'Strongest on path design',     direct:'claude-opus-5' },
   { id:'balanced', name:'Balanced',       note:'Faster, and very close',       direct:'claude-sonnet-5' },
   { id:'fast',     name:'Fastest',        note:'Good for a live room',         direct:'claude-haiku-4-5' }
 ];
@@ -1621,7 +1624,7 @@ const WEEK_PARTS = [
   { id:'teach',  name:'Teaching Strategy',                        days:'Days 1–2', mins:'40–60 min', est:40, pick:null,
     why:'A technical reading of 900–1,100 words in textbook register, with visual supports, plus your own video if you have one.' },
   { id:'assess', name:'Assessment',                               days:'Days 1–2', mins:'20–30 min', est:20, pick:null,
-    why:'Ten vocabulary questions and ten content questions at a fixed cognitive spread, randomised, with the key held separately.' },
+    why:'Ten vocabulary questions and ten content questions at a fixed cognitive spread, randomized, with the key held separately.' },
   { id:'extend', name:'Extending & Refining',                     days:'Days 3–4', mins:'40–80 min', est:60, pick:'deliverable',
     why:'The week’s real work: an artefact a professional in this field might actually produce.' },
   { id:'sum',    name:'Summarizing & Reflection',                 days:'Day 5',    mins:'40 min',    est:40, pick:'summarizing',
@@ -1661,7 +1664,7 @@ const ACTIVATING = [
   { id:'scenario',   name:'Workplace scenario',   blurb:'A realistic situation with a decision in it. Students say what they would do before they are taught anything.' },
   { id:'prediction', name:'Baseline prediction',  blurb:'Students commit to a prediction, then find out. Strongest when the obvious answer is wrong.' },
   { id:'inquiry',    name:'Inquiry questions',    blurb:'Three questions the reading will answer, posed before it. Good for information-heavy weeks.' },
-  { id:'dilemma',    name:'Professional dilemma', blurb:'Two defensible courses of action and a reason not to pick either. For judgement and ethics.' },
+  { id:'dilemma',    name:'Professional dilemma', blurb:'Two defensible courses of action and a reason not to pick either. For judgment and ethics.' },
   { id:'artefact',   name:'Read the artefact',    blurb:'A real document from the field — a form, a log, an order — and what it tells you.' },
   { id:'failure',    name:'What went wrong here', blurb:'A short account of a failure unfolding. Students name the moment it became inevitable.' },
   { id:'sort',       name:'Sort and justify',     blurb:'Order or group items before knowing the rule, then defend the arrangement.' },
@@ -1674,7 +1677,7 @@ const DELIVERABLES = [
   { id:'report',    name:'Workplace report',          tool:'Docs',      blurb:'The written record a supervisor would actually read. Default for documentation and analysis weeks.' },
   { id:'matrix',    name:'Decision matrix',           tool:'Sheets',    blurb:'Options scored against criteria the student sets. For weeks that end in a recommendation.' },
   { id:'plan',      name:'Planning document',         tool:'Docs',      blurb:'A sequence with owners, timings and contingencies. For coordination and logistics.' },
-  { id:'analysis',  name:'Spreadsheet analysis',      tool:'Sheets',    blurb:'Figures organised, calculated and interpreted. Give extra guidance — not every student has used Sheets.' },
+  { id:'analysis',  name:'Spreadsheet analysis',      tool:'Sheets',    blurb:'Figures organized, calculated and interpreted. Give extra guidance — not every student has used Sheets.' },
   { id:'proposal',  name:'Proposal',                  tool:'Docs',      blurb:'A case made to somebody with the authority to say no.' },
   { id:'brief',     name:'Research brief',            tool:'Docs',      blurb:'Findings from outside sources, attributed. Use sparingly — most weeks should not need research.' },
   { id:'deck',      name:'Presentation',              tool:'Slides',    blurb:'For weeks where communicating the thing is the skill, not doing it.' },
@@ -1758,20 +1761,20 @@ const CLUSTER_PROFILES = {
     style:'procedural, hands-on, precise, safety-focused and project-oriented', thinking:'procedural reasoning and practical problem solving',
     deliverables:['Project Plan','Safety Plan','Blueprint Analysis','Materials Estimate'] },
   'Supply Chain & Transportation': { emphasis:'logistics, scheduling, inventory, distribution, transportation systems, route planning, efficiency, customer service, data tracking, safety, time constraints, coordination',
-    apps:'delivery planning, inventory analysis, route optimisation, warehouse organisation, supply chain disruption response',
-    style:'efficient, organised, time-sensitive, systems-oriented and data-informed', thinking:'logistics and systems optimisation',
+    apps:'delivery planning, inventory analysis, route optimization, warehouse organization, supply chain disruption response',
+    style:'efficient, organized, time-sensitive, systems-oriented and data-informed', thinking:'logistics and systems optimization',
     deliverables:['Route Plan','Logistics Analysis','Inventory Report'] },
   'Advanced Manufacturing': { emphasis:'production processes, precision, measurement, quality control, automation, process improvement, safety, troubleshooting, specifications, continuous improvement',
     apps:'quality inspection, production planning, process analysis, manufacturing troubleshooting, production data interpretation, process improvement proposals',
     style:'precise, process-driven, technical, quality-focused and systems-oriented', thinking:'precision, process analysis and quality control',
     deliverables:['Quality-Control Report','Process Analysis','Production Plan'] },
-  'Healthcare & Human Services': { emphasis:'professional communication, documentation, ethics, confidentiality, safety, procedures, client or patient needs, decision-making, empathy, accuracy, professional judgement',
+  'Healthcare & Human Services': { emphasis:'professional communication, documentation, ethics, confidentiality, safety, procedures, client or patient needs, decision-making, empathy, accuracy, professional judgment',
     apps:'patient or client scenarios, documentation, communication decisions, ethical dilemmas, service planning',
-    style:'professional, ethical, detail-oriented, people-centred and evidence-based', thinking:'ethical reasoning, communication and evidence-based decisions',
+    style:'professional, ethical, detail-oriented, people-centered and evidence-based', thinking:'ethical reasoning, communication and evidence-based decisions',
     deliverables:['Case Analysis','Professional Documentation','Service Plan'] },
-  'Education': { emphasis:'communication, planning, organisation, reflection, learner needs, instructional decision-making, collaboration, assessment, differentiation, professional responsibility',
+  'Education': { emphasis:'communication, planning, organization, reflection, learner needs, instructional decision-making, collaboration, assessment, differentiation, professional responsibility',
     apps:'lesson planning, learning activity design, student support planning, assessment analysis, communication with stakeholders',
-    style:'reflective, organised, communication-focused, learner-centred and planning-oriented', thinking:'reflection, planning, communication and learner-centred decision-making',
+    style:'reflective, organized, communication-focused, learner-centered and planning-oriented', thinking:'reflection, planning, communication and learner-centered decision-making',
     deliverables:['Lesson Plan','Learning Activity','Assessment Analysis'] },
   'Public Service & Safety': { emphasis:'policies and procedures, leadership, safety, ethics, decision-making, incident response, communication, accountability, risk assessment, public responsibility, documentation',
     apps:'emergency scenarios, incident response, policy analysis, safety planning, public communication, leadership decisions',
@@ -1785,17 +1788,17 @@ const CLUSTER_PROFILES = {
     apps:'business planning, resource allocation, management decisions, startup planning, operational problem solving',
     style:'strategic, decision-oriented, leadership-focused and business-minded', thinking:'strategic thinking and resource allocation',
     deliverables:['Business Plan','Decision Matrix','Operations Plan'] },
-  'Marketing & Sales': { emphasis:'customer needs, communication, persuasion, market research, branding, campaign development, consumer behaviour, sales strategy, data interpretation, relationship building',
+  'Marketing & Sales': { emphasis:'customer needs, communication, persuasion, market research, branding, campaign development, consumer behavior, sales strategy, data interpretation, relationship building',
     apps:'campaign planning, customer analysis, brand evaluation, sales strategies, market research, promotional planning',
     style:'creative, persuasive, customer-focused, analytical and communication-driven', thinking:'customer analysis, creativity, persuasion and strategic communication',
     deliverables:['Campaign Plan','Customer Analysis','Marketing Proposal'] },
   'Arts, Entertainment & Design': { emphasis:'creativity, design, audience needs, visual communication, storytelling, production, collaboration, revision, presentation, professional portfolios',
     apps:'design briefs, creative proposals, portfolio development, production planning, audience analysis',
-    style:'creative, iterative, audience-centred, collaborative and visually oriented', thinking:'creative problem solving, design thinking and audience analysis',
+    style:'creative, iterative, audience-centered, collaborative and visually oriented', thinking:'creative problem solving, design thinking and audience analysis',
     deliverables:['Design Brief','Creative Proposal','Portfolio Component'] },
-  'Hospitality, Events & Tourism': { emphasis:'customer service, professional communication, guest experience, organisation, scheduling, event planning, hospitality standards, teamwork, cultural awareness, service recovery',
+  'Hospitality, Events & Tourism': { emphasis:'customer service, professional communication, guest experience, organization, scheduling, event planning, hospitality standards, teamwork, cultural awareness, service recovery',
     apps:'event planning, guest-service scenarios, travel planning, customer-service problem solving, event logistics',
-    style:'customer-centred, organised, service-oriented, professional and adaptable', thinking:'service decisions, organisation, adaptability and customer experience',
+    style:'customer-centered, organized, service-oriented, professional and adaptable', thinking:'service decisions, organization, adaptability and customer experience',
     deliverables:['Event Plan','Guest-Service Plan','Travel Proposal'] },
   'Energy & Natural Resources': { emphasis:'environmental stewardship, safety, resource management, sustainability, scientific reasoning, data interpretation, systems thinking, technical procedures, risk assessment, conservation',
     apps:'energy-use analysis, environmental decision-making, resource planning, sustainability proposals, risk analysis',
@@ -1976,6 +1979,32 @@ function reflectionShaped(sm){
   return !!st && String(st.prompt||'').toLowerCase().includes(String(sm.strategy).toLowerCase());
 }
 
+/* Models sometimes write the cognitive level into the stem ("Recall: What…",
+   "[Analysis] …"). Students must never see it; it is stripped without the model. */
+const LEVEL_PREFIX = /^\s*(?:\(\s*(?:recall|understanding|application|analysis)\s*\)|\[\s*(?:recall|understanding|application|analysis)\s*\]|(?:recall|understanding|application|analysis)\s*[:\-–—.])\s*/i;
+function stripLevelLabels(list){ (list||[]).forEach(q=>{ if(q && typeof q.stem==='string'){ const t=q.stem.replace(LEVEL_PREFIX,''); if(t.length>8) q.stem = t.charAt(0).toUpperCase()+t.slice(1); } }); return list; }
+const levelLabelled = list => (list||[]).filter(q=>LEVEL_PREFIX.test(String((q&&q.stem)||''))).length;
+
+/* A Mathematics strand week is maths: most content questions are calculations
+   with numbers from the field. A question counts when its stem carries a number. */
+const numericStems = list => (list||[]).filter(q=>/\d/.test(String((q&&q.stem)||''))).length;
+const MATH_MIN = 5;
+
+/* Gem 3.23: the reflection answers the Essential Question, then ends on an
+   open question that goes further. Ending on the Essential Question itself
+   (or nearly the same words) does not count. */
+function closesOnEQ(d){
+  const norm = x => String(x||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
+  const a = norm(d && d.essentialQuestion), b = norm(d && d.summarizing && d.summarizing.openQuestion);
+  if(!a || !b) return false;
+  const A = new Set(a.split(' ')), B = b.split(' ');
+  return a===b || B.filter(w=>A.has(w)).length/Math.max(B.length,1) > 0.8;
+}
+
+/* A cumulative assessment gives itself away when the right answer is the
+   longest option in more than about three questions in ten. */
+const cumulativeGivesAway = cum => !!cum && (cum.questions||[]).length>0 && longestCorrect(cum.questions) > Math.ceil(cum.questions.length*0.3);
+
 /* Program Maps — the district's 1–10 weighting of academic courses for a
    cluster, grouped by the four badge strands. */
 const STRAND_OF_COURSE = c => /\((math|mathematics)\)|^mathematics\b|algebra|geometry|calculus|statistics|trig/i.test(c) ? 'Mathematics'
@@ -2054,10 +2083,10 @@ const VIDEO_RULE = `- The video has 4-6 scenes in the same order as the reading,
   never a real person or place.
 `;
 
-const SYS_WEEK = `You write curriculum for a school district's credential programme.
+const SYS_WEEK = `You write curriculum for a school district's credential program.
 
 You are asked for ONE week of instruction. The week is self-contained: it does not reference
-other weeks, assume what came before or after, or build towards a capstone.
+other weeks, assume what came before or after, or build toward a capstone.
 
 Register is professional textbook writing for grades 9 and 10. Every example comes from the
 workplace, never from school.
@@ -2075,18 +2104,18 @@ function weekSystem(cred){ return SYS_WEEK.replace('grades 9 and 10', readingLev
    inventing a named form or procedure that no document established. */
 const GROUNDING = {
   partner: `There is NO document for this week, but the teacher has described a specific employer
-and placement in the brief below. You may name that organisation and use exactly the details
+and placement in the brief below. You may name that organization and use exactly the details
 the teacher gave. Do not invent procedures, form names, document numbers or rules beyond what
 they described. Where the week needs more than they supplied, teach what is genuinely true
 across the field and present it as general practice, not as this employer's.`,
-  document: `This week is written from a partner organisation's own document, supplied below.
+  document: `This week is written from a partner organization's own document, supplied below.
 Everything you write must be traceable to it. Use its terminology, its named forms and its
 procedures. Never invent a procedure, a form, a document reference or a rule it does not contain.`,
   topic: `There is NO partner document for this week. You are given a topic and the career
 sub-cluster it belongs to, and you write from the field itself.
 Because nothing has been supplied to quote: do not invent named forms, document numbers,
 company names or site-specific procedures. Teach what is genuinely true across the field, use
-realistic but unnamed workplaces, and keep every example recognisable to somebody who works in
+realistic but unnamed workplaces, and keep every example recognizable to somebody who works in
 one of the careers listed.`
 };
 
@@ -2113,9 +2142,9 @@ From the district's Program Maps for this sub-cluster (use where they genuinely 
 ${sm && sm.certs.length ? `- Industry certifications it leads to: ${sm.certs.slice(0,6).join('; ')}\n` : ''}${pmc && pmc.partners.length ? `- Local industry partners: ${pmc.partners.slice(0,8).join('; ')} (name one only if the teacher's material does)\n` : ''}${pmc && pmc.outlook ? `- Industry outlook: ${String(pmc.outlook).slice(0,300)}` : ''}` : '';
   const clusterBlock = prof ? `
 Career cluster: ${prof.name}. The cluster must shape how the week is designed, not just label it:
-- Emphasise, where it fits the topic: ${prof.emphasis}.
+- Emphasize, where it fits the topic: ${prof.emphasis}.
 - Typical workplace applications: ${prof.apps}.
-- Instructional style: ${prof.style}. The thinking students practise: ${prof.thinking}.
+- Instructional style: ${prof.style}. The thinking students practice: ${prof.thinking}.
 - Deliverables that fit this cluster: ${prof.deliverables.join(', ')} — shape the chosen deliverable into the product this field would actually make.
 - Do not keep telling students which cluster they are in; it should show in the work they do.${extraClusters.length?`
 Also draw examples from: ${extraClusters.map(p=>p.name).join(', ')}.`:''}` : '';
@@ -2130,7 +2159,7 @@ The pre-selected vocabulary must appear in the vocabulary list exactly as writte
   const STRAND_CORE = {
     'Mathematics':'angles and degrees, ratios and rates, percent and percent change, averages and spread, unit conversion, measurement error, reading and building graphs, linear relationships',
     'Science':'the body systems, forces and motion, energy, chemistry of solutions, microbiology, the scientific method — whichever this field actually rests on',
-    'English Language Arts':'technical reading, summarising, precise vocabulary, writing for a professional reader, structuring an argument, speaking and listening',
+    'English Language Arts':'technical reading, summarizing, precise vocabulary, writing for a professional reader, structuring an argument, speaking and listening',
     'Social Studies':'history of the field, law and regulation, ethics, economics of the work, how institutions and communities shape it'
   };
   const strand = cred.strand && cred.strand !== 'Career & Technical'
@@ -2226,7 +2255,7 @@ ${cred.videoGen ? VIDEO_SHAPE : ''}  "vocabulary": [{ "term": "", "def": "one se
   },
   "plan": {
     "concept": "one short paragraph on the concept taught. Not daily activities.",
-    "activating": "2-3 sentences summarising the opening: its workplace context, its instructional purpose, and how students activate prior knowledge. Do not rewrite the scenario.",
+    "activating": "2-3 sentences summarizing the opening: its workplace context, its instructional purpose, and how students activate prior knowledge. Do not rewrite the scenario.",
     "teaching": "3-4 sentences: major concepts, the order they are taught in, workplace connections. Do not reproduce the reading.",
     "standards": [{ "code": "exact code from the New York State standards list below", "desc": "one line" }],
     "extending": "2-3 sentences: purpose, expected product, workplace connection. No directions, no rubric.",
@@ -2307,6 +2336,8 @@ function weekChecks(d){
     { ok: (d.vocabQuiz||[]).length===10,  label:'Ten vocabulary questions', detail:`${(d.vocabQuiz||[]).length}` },
     { ok: (d.contentQuiz||[]).length===10, label:'Ten content questions', detail:`${(d.contentQuiz||[]).length}` },
     { ok: situated>=3, label:'Application and Analysis read as workplace decisions', detail:`${situated} of ${higher}` },
+    { ok: !levelLabelled(d.contentQuiz) && !levelLabelled(d.vocabQuiz), label:'Questions don’t name their level', detail: levelLabelled(d.contentQuiz)?`${levelLabelled(d.contentQuiz)} labeled`:'' },
+    ...(d.strand==='Mathematics' ? [{ ok: numericStems(d.contentQuiz)>=MATH_MIN, label:'Mathematics week: most questions are calculations', detail:`${numericStems(d.contentQuiz)} of 10 use numbers` }] : []),
     { ok: mixOk, label:'Cognitive spread is 3 / 3 / 2 / 2',
       detail: Object.keys(COGNITIVE_MIX).map(k=>`${k} ${mix[k]||0}`).join(' · ') },
     { ok: rubricIsDistrict((d.extending||{}).rubric), label:'District rubric · 5 criteria × 4 levels',
@@ -2327,6 +2358,7 @@ function weekChecks(d){
     ...teacherNotesChecks(d),
     { ok: (d.objectives||[]).length>=4 && (d.objectives||[]).length<=6, label:'Four to six objectives', detail:`${(d.objectives||[]).length}` },
     (()=>{ const r = researchCheck(d); return { ok:r.ok, label:'Research names a reliable source', detail:r.detail }; })(),
+    { ok: !closesOnEQ(d), label:'Reflection ends on a new question', detail: closesOnEQ(d) ? 'it repeats the Essential Question' : '' },
     { ok: isOpenQuestion(d.essentialQuestion) && isOpenQuestion((d.summarizing||{}).openQuestion),
       label:'Open-ended questions', detail: !isOpenQuestion(d.essentialQuestion)?'Essential Question':!isOpenQuestion((d.summarizing||{}).openQuestion)?'reflection’s last question':'' },
     { ok: !placeholderHits(d).length && !((d.reading||{}).sections||[]).some(s=>GENERIC_HEADING.test(s.heading||'')),
@@ -2362,11 +2394,13 @@ async function generateWeek(credId){
     }
     if(!cred.videoGen) delete j.video;
     j.videoOn = !!cred.videoGen;
+    j.strand = cred.strand || 'Career & Technical';
     normalizeWeek(j);
     await repairVisuals(j, p.system);
     await repairReflectionStrategy(j, p.system, cred);
+    await repairOpenQuestion(j, p.system);
     await repairVocabInReading(j, p.system);
-    await repairQuizzes(j, p.system);
+    await repairQuizzes(j, p.system, cred.strand);
     await repairDistractors(j, p.system);
     await repairDeliverable(j, p.system);
     spreadKeys(j.vocabQuiz); spreadKeys(j.contentQuiz); j.keysSpread = true;
@@ -2484,6 +2518,20 @@ Return JSON only: { "prompt": "" }` }));
   }
 }
 
+async function repairOpenQuestion(j, system){
+  const sm = j.summarizing || {}; if(!closesOnEQ(j)) return;
+  busyStage('Giving the reflection its own closing question');
+  for(let tries=0; tries<2 && closesOnEQ(j); tries++){
+    const out = extractJSON(await callModel({ system, maxTokens:400, user:
+`Essential Question: ${j.essentialQuestion||''}
+The reflection currently ends by repeating it: "${sm.openQuestion||''}"
+Write ONE new open-ended question for the end of the reflection that goes beyond the Essential Question — a new situation, a harder case, or where this leads in the student's career. One sentence, addressed to the student.
+Return JSON only: { "openQuestion": "" }` }));
+    const q = out && String(out.openQuestion||'').trim();
+    if(q && isOpenQuestion(q) && !closesOnEQ({ essentialQuestion:j.essentialQuestion, summarizing:{ openQuestion:q } })) sm.openQuestion = q;
+  }
+}
+
 /* 3.9 — a vocabulary term that never appears in the reading gets one
    sentence added where it belongs; nothing else in the reading changes. */
 async function repairVocabInReading(j, system){
@@ -2552,10 +2600,10 @@ function vocabStandsOut(d){
     if(terms.some(t=>!used.has(t) && t.length>minWrong)) avoidable++; else unavoidable++; });
   return { avoidable, unavoidable };
 }
-async function repairDistractors(j, system){
+async function repairDistractors(j, system, maxTries=2){
   evenVocabOptions(j);
   for(const key of ['contentQuiz']){
-    for(let tries=0; tries<2; tries++){
+    for(let tries=0; tries<maxTries; tries++){
       const list = j[key]||[]; const reuse = key==='contentQuiz' ? reusedOptions(list) : 0;
       if(longestCorrect(list) <= LONGEST_LIMIT && !reuse) break;
       busyStage(key==='contentQuiz'?'Evening out the content question options':'Evening out the vocabulary question options');
@@ -2623,6 +2671,7 @@ function tidyActivity(a){
   return a;
 }
 function normalizeWeek(j){
+  stripLevelLabels(j.contentQuiz); stripLevelLabels(j.vocabQuiz);
   if(j.summarizing && j.summarizing.activity) tidyActivity(j.summarizing.activity);
   ((j.video||{}).scenes||[]).forEach(s=>{
     const k = String(s.kind||'').toLowerCase().trim();
@@ -2673,7 +2722,7 @@ function mixOff(list){ const m={}; (list||[]).forEach(q=>{ m[q.level]=(m[q.level
   const unsituated = Math.max(0, 3 - (list||[]).filter(q=>(q.level==='Application'||q.level==='Analysis') && isSituated(q)).length);
   return Object.keys(COGNITIVE_MIX).reduce((n,k)=>n+Math.abs((m[k]||0)-COGNITIVE_MIX[k]),0) + Math.abs((list||[]).length-10) + unsituated; }
 function vocabMiss(d, list){ const c = vocabAnswerCoverage(Object.assign({}, d, { vocabQuiz:list })); return (c.total - c.once) + Math.abs((list||[]).length-10); }
-async function repairQuizzes(j, system){
+async function repairQuizzes(j, system, strand){
   const fixOne = async (key, ask, score) => {
     for(let tries=0; tries<2 && score(j[key])>0; tries++){
       busyStage(ask.stage);
@@ -2684,13 +2733,17 @@ async function repairQuizzes(j, system){
     }
   };
   const reading = (j.reading.sections||[]).map(s=>s.heading+': '+s.body).join('\n\n').slice(0,9000);
-  await fixOne('contentQuiz', { stage:'Rebalancing the content questions to 3 / 3 / 2 / 2',
+  const maths = strand==='Mathematics';
+  const mathOff = l => maths ? Math.max(0, MATH_MIN - numericStems(l)) : 0;
+  await fixOne('contentQuiz', { stage: maths && numericStems(j.contentQuiz)<MATH_MIN && !mixOff(j.contentQuiz) ? 'Making the maths questions calculations' : 'Rebalancing the content questions to 3 / 3 / 2 / 2',
     user:`Reading:\n${reading}\n\nCurrent questions:\n${JSON.stringify(j.contentQuiz)}\n\nRewrite these into exactly 10 questions on this reading:
 exactly ${COGNITIVE_MIX.Recall} Recall, ${COGNITIVE_MIX.Understanding} Understanding, ${COGNITIVE_MIX.Application} Application, ${COGNITIVE_MIX.Analysis} Analysis,
 mixed through the set. The level must be true of the question, not just a label: Application and Analysis questions open with a
 short workplace situation (a role, what happened) and ask what to do or why; Analysis asks them to compare, diagnose or judge. Keep the questions that already fit. Wrong options plausible.
+Never write the level into the question text.${maths?`
+This is a Mathematics week: at least ${MATH_MIN+1} of the ten are calculations with real numbers from the field, the right answer computed and checked, the wrong options the results of likely mistakes.`:''}
 Return JSON only: { "contentQuiz": [ { "stem":"", "o":["","","",""], "a":0, "why":"", "level":"Recall | Understanding | Application | Analysis" } ] }` },
-    l=>mixOff(l));
+    l=>mixOff(l) + mathOff(stripLevelLabels(l)));
   await fixOne('vocabQuiz', { stage:'Making each vocabulary term the right answer once',
     user:`Vocabulary list:\n${(j.vocabulary||[]).map(v=>v.term+' — '+v.def).join('\n')}\n\nWrite exactly 10 vocabulary questions, one per term above, in a new order.
 Each gives the meaning or a use in context, and its right answer is that term written exactly as in the list, so each term is the right answer
@@ -2771,11 +2824,12 @@ Return JSON only: { ${KEYS.map(k=>`"${k}": …`).join(', ')} }` });
     KEYS.forEach(k=>{ j[k] = out[k]; });
     if(part==='reading'){ for(let t=0;t<2 && readingWords(j)<900;t++){ busyStage('Lengthening the reading'); await lengthenReading(j, p.system, readingLevelOf(cred)); } }
     if(part==='video') j.videoOn = true;
+    j.strand = cred.strand || 'Career & Technical';
     normalizeWeek(j);
     if(part==='reading'){ await repairVisuals(j, p.system); await repairVocabInReading(j, p.system); }
-    if(part==='assessment' || part==='reading'){ await repairQuizzes(j, p.system); await repairDistractors(j, p.system); spreadKeys(j.vocabQuiz); spreadKeys(j.contentQuiz); }
+    if(part==='assessment' || part==='reading'){ await repairQuizzes(j, p.system, cred.strand); await repairDistractors(j, p.system); spreadKeys(j.vocabQuiz); spreadKeys(j.contentQuiz); }
     if(part==='extending') await repairDeliverable(j, p.system);
-    if(part==='summarizing') await repairReflectionStrategy(j, p.system, cred);
+    if(part==='summarizing'){ await repairReflectionStrategy(j, p.system, cred); await repairOpenQuestion(j, p.system); }
     j.title = cred.title;
     pushRevision(cred, 'edited', j);
     cred.content = j; cred.updatedAt = cred.contentAt = nowISO();
@@ -2807,6 +2861,13 @@ const DIFF_GROUPS = [
   'Students requiring scaffolded instruction'
 ];
 
+/* The teacher's own requests (Input Form: differentiation, accessibility,
+   classroom), one item each, so every one gets its own answer. */
+function teacherRequests(cred){
+  const inp = (cred && cred.inputs) || {};
+  return ['differentiation','accessibility','classroom'].flatMap(k=>String(inp[k]||'').split(/[;\n]+|\.\s+/))
+    .map(x=>x.replace(/^[\s\-•·\d.)]+/,'').trim()).filter(x=>x.length>3);
+}
 function promptTeacherNotes(cred, j, note){
   const inp = cred.inputs || {};
   const prof = clusterProfile(clusterOf(cred.subCluster));
@@ -2834,7 +2895,8 @@ Return JSON only:
   "differentiation": [${DIFF_GROUPS.map(g=>`{ "group": "${g}", "strategy": "one or two sentences specific to this week's reading and deliverable; improves access, never lowers rigor" }`).join(',\n                      ')}],
   "cdos": [{ "code": "exact code from the CDOS list", "desc": "one line: how this week evidences it" }],
   "videoRecs": [{ "title": "the kind of video to find", "search": "the exact words to search for on YouTube or PBS LearningMedia", "shows": "what a good one shows and where it fits in the week" }],
-  "recommendations": ["2-4 additional lesson recommendations: an extension, an industry or guest connection, a resource. Specific to this week."]
+  "recommendations": ["2-4 additional lesson recommendations: an extension, an industry or guest connection, a resource. Specific to this week."]${teacherRequests(cred).length?`,
+  "requests": [${teacherRequests(cred).map(r=>`{ "request": ${JSON.stringify(r)}, "how": "exactly what the teacher does for this in THIS week's reading, quizzes and deliverable" }`).join(', ')}]`:''}
 }
 Give two or three CDOS codes and three video recommendations (none if the teacher supplies a video). Never invent a web address.`;
 }
@@ -2858,8 +2920,20 @@ async function generateTeacherNotes(cred, j, system, note){
     videoRecs: inp.video ? [] : arr(out.videoRecs).filter(v=>v && (v.title||v.search)).slice(0,4)
       .map(v=>({ title:String(v.title||''), search:String(v.search||v.title||''), shows:String(v.shows||'') })),
     recommendations: arr(out.recommendations).map(String).filter(x=>x.trim()).slice(0,5),
+    requests: teacherRequests(cred).map((r,i)=>{ const hit = arr(out.requests).find(x=>x && String(x.request||'').trim().toLowerCase()===r.toLowerCase()) || arr(out.requests)[i] || {}; return { request:r, how:String(hit.how||'').trim() }; }),
     instructorVideo: inp.video || ''
   };
+  const open = j.teacherNotes.requests.filter(r=>r.how.length<20);
+  if(open.length){
+    busyStage('Answering the teacher’s requests');
+    let more = null;
+    try{ more = extractJSON(await callModel({ system, maxTokens: 1200, user:
+`The teacher of the week "${j.title||cred.title}" asked for the following. For each, say exactly what the teacher does for it in this week's
+reading, quizzes and deliverable (task: ${String((j.extending||{}).task||'').slice(0,300)}). One or two sentences each, specific, never generic.
+${open.map(r=>'- '+r.request).join('\n')}
+Return JSON only: { "requests": [ { "request": "", "how": "" } ] }` })); }catch(e){ more = null; }
+    arr((more||{}).requests).forEach((x,i)=>{ const r = j.teacherNotes.requests.find(q=>q.request.toLowerCase()===String(x.request||'').trim().toLowerCase()) || open[i]; if(r && x.how) r.how = String(x.how).trim(); });
+  }
 }
 
 /* The self-check lines that Teacher Notes answer. */
@@ -2872,7 +2946,9 @@ function teacherNotesChecks(d){
     { ok: !!t && (t.cdos||[]).length>=1, label:'CDOS standards cited', detail: t ? `${(t.cdos||[]).length}` : '' },
     { ok: !!t && ((t.videoRecs||[]).length>=2 || !!String(t.instructorVideo||'').trim()), label:'Video recommendations, or the teacher’s own video',
       detail: t && t.instructorVideo ? 'teacher video' : t ? `${(t.videoRecs||[]).length} recommendations` : '' },
-    { ok: !!t && (t.recommendations||[]).length>=2, label:'Additional lesson recommendations', detail: t ? `${(t.recommendations||[]).length}` : '' }
+    { ok: !!t && (t.recommendations||[]).length>=2, label:'Additional lesson recommendations', detail: t ? `${(t.recommendations||[]).length}` : '' },
+    ...(t && (t.requests||[]).length ? [{ ok: t.requests.every(r=>String(r.how||'').trim().length>=20), label:'Every teacher request answered',
+      detail: `${t.requests.filter(r=>String(r.how||'').trim().length>=20).length} of ${t.requests.length}` }] : [])
   ];
 }
 
@@ -2913,6 +2989,7 @@ function teacherNotesBlock(c){
       <b class="small mt12" style="display:block">CDOS</b>
       ${t && (t.cdos||[]).length ? `<div class="mt8">${t.cdos.map(s=>`<div class="small"><b>${esc(s.code)}</b> — ${esc(s.desc||'')}</div>`).join('')}</div>` : `<div class="xs muted mt4">None yet.</div>`}`)}
     ${t ? sec('Career cluster alignment', UL(t.alignment)) : ''}
+    ${t && (t.requests||[]).length ? sec('Your requests', `<div style="display:grid;gap:10px">${t.requests.map(r=>`<div class="small"><b>${esc(r.request)}</b><br>${esc(r.how||'Not answered yet — rewrite the Teacher Notes.')}</div>`).join('')}</div>`) : ''}
     ${t ? sec('Differentiation', `<div style="display:grid;gap:10px">${(t.differentiation||[]).map(x=>`<div class="small"><b>${esc(x.group)}</b><br>${esc(x.strategy||'—')}</div>`).join('')}</div>`) : ''}
     ${t ? sec('Additional lesson recommendations', UL(t.recommendations)) : ''}
   </div>`;
@@ -2929,6 +3006,7 @@ function teacherNotesDoc(c){
     H('Standards'), `<p><b>New York State Next Generation</b></p>`, ((d.plan||{}).standards||[]).length ? UL(d.plan.standards.map(s=>`${s.code} — ${s.desc}`)) : P('Waiting for the district’s documents.'),
     `<p><b>CDOS</b></p>`, UL((t.cdos||[]).map(s=>`${s.code} — ${s.desc}`)),
     H('Career cluster alignment'), UL(t.alignment),
+    (t.requests||[]).length ? H('Your requests') + t.requests.map(r=>`<p><b>${esc(r.request)}:</b> ${esc(r.how||'')}</p>`).join('') : '',
     H('Differentiation'), (t.differentiation||[]).map(x=>`<p><b>${esc(x.group)}:</b> ${esc(x.strategy||'')}</p>`).join(''),
     H('Additional lesson recommendations'), UL(t.recommendations)
   ].join('\n');
@@ -3078,7 +3156,7 @@ function viewCreate(){
       <p class="small muted mt8" style="max-width:70ch">${c.level==='nano'
         ? `The home sub-cluster is the field this week is written for — it decides which careers the examples
            come from. It can still be reused in a credential anywhere else.`
-        : `The sub-cluster decides which careers this leads to, and which Career Badge it can count towards.`}</p>
+        : `The sub-cluster decides which careers this leads to, and which Career Badge it can count toward.`}</p>
       <label class="lbl mt20">${c.level==='nano'?'Home sub-cluster':'Sub-cluster'}</label>
       <select class="field" id="csub">
         ${c.level==='nano'||c.level==='badge'
@@ -3121,7 +3199,7 @@ function createSource(){
     <p class="small muted mt8" style="max-width:72ch">${c.srcTab==='brief'
       ? `No document? Say what the week should teach and it is written from the field itself — or, if it
          is for a particular employer, from what you tell it about them.`
-      : `A programme outline, a job description, a policy, an onboarding pack — whatever the partner
+      : `A program outline, a job description, a policy, an onboarding pack — whatever the partner
          actually sent. The generator quotes it rather than inventing around it.`}</p>
     <div class="tabs mt20">${T('file','Upload a file')}${T('paste','Paste text')}${T('brief','Write a brief')}</div>
 
@@ -3160,7 +3238,7 @@ function createSource(){
 const wordCount = t => String(t||'').trim().split(/\s+/).filter(Boolean).length;
 /* The source is whatever the open tab holds — never something left behind
    on another tab. */
-/* The district's Credentialing Curriculum Input Form, recognised from an
+/* The district's Credentialing Curriculum Input Form, recognized from an
    upload or a paste (Gem 1.3–1.5). Its Course Content is what the week is
    written from; with none, the week is written from the form's other fields. */
 function createForm(c){
@@ -3181,7 +3259,7 @@ function formCard(f){
   const got = Object.keys(INPUT_FORM_LABEL).filter(k=>f[k]!=null && String(f[k]).length);
   const blank = ['credential','course','module','week','content','skillFocus','scenarioIdea','deliverablePref','vocabulary','clusters'].filter(k=>!got.includes(k));
   return `<div class="callout tip mt16"><span class="ic">${ic('check')}</span><div>
-    <b>District Input Form recognised.</b> ${got.length} field${got.length===1?'':'s'} filled in${blank.length?`; blank ones are generated: ${blank.map(k=>INPUT_FORM_LABEL[k]).join(', ')}`:''}.
+    <b>District Input Form recognized.</b> ${got.length} field${got.length===1?'':'s'} filled in${blank.length?`; blank ones are generated: ${blank.map(k=>INPUT_FORM_LABEL[k]).join(', ')}`:''}.
     <div class="xs mt8" style="display:grid;gap:3px">${got.map(k=>`<div><b>${esc(INPUT_FORM_LABEL[k])}:</b> ${esc(Array.isArray(f[k])?f[k].join(', '):String(f[k]).slice(0,140))}${String(f[k]).length>140?'…':''}</div>`).join('')}</div>
   </div></div>`;
 }
@@ -3230,7 +3308,7 @@ function bindCreate(){
     c.pasteText = paste.value; syncCreate();
     if(was !== !!createForm(c)){ const pos = paste.selectionStart; render(); const np=$('#cpaste'); if(np){ np.focus(); np.setSelectionRange(pos,pos); } return; }
     const w=$('[data-cwords]'); if(w) w.textContent = c.pasteText.trim() ? wordCount(c.pasteText).toLocaleString()+' words'+(wordCount(c.pasteText)<40?' — at least 40 needed':'') : 'Nothing pasted yet';
-    // Keep the recognised-form summary in step with the text as it grows (typed, not pasted in one go).
+    // Keep the recognized-form summary in step with the text as it grows (typed, not pasted in one go).
     const fc=$('[data-formcard]'); if(fc) fc.innerHTML = formCard(createForm(c));
   };
   bindBriefForm(document, c.brief || (c.brief={}), subCluster(c.subCluster), ()=> syncCreate());
@@ -3344,12 +3422,12 @@ function bindDrop(el, take){
    Two outcomes, and the generator treats them differently:
    without an employer it writes from the field and must not
    invent named forms or companies; with one it may use the
-   organisation and details the teacher supplied, and nothing
+   organization and details the teacher supplied, and nothing
    beyond them.
    ========================================================= */
 const BRIEF_PARTNER_FIELDS = [
-  ['org',     'The organisation', 2],
-  ['role',    'What the placement is called', 2],
+  ['org',     'The organization', 1],
+  ['role',    'What the placement is called', 1],
   ['does',    'What the student actually does there', 4],
   ['certify', 'What the employer wants to be able to rely on', 3]
 ];
@@ -3380,14 +3458,14 @@ function briefForm(b, sub){
       ${sub && (programMap(clusterOf(sub.name))||{partners:[]}).partners.length ? `<label class="lbl" for="bpartner">District partner <span class="muted2" style="font-weight:400">— from the Program Maps, or type another below</span></label>
         <select class="field mb16" id="bpartner" data-bpartner><option value="">Choose one…</option>${programMap(clusterOf(sub.name)).partners.map(x=>`<option ${b.org===x?'selected':''}>${esc(x)}</option>`).join('')}</select>` : ''}
       ${BRIEF_PARTNER_FIELDS.map(([k,l,r],n)=>`<label class="lbl ${n?'mt16':''}">${esc(l)}</label>
-        <textarea class="field" data-brief="${k}" rows="${r}">${esc(b[k]||'')}</textarea>`).join('')}
+        ${r===1 ? `<input class="field" data-brief="${k}" value="${esc(b[k]||'')}">` : `<textarea class="field" data-brief="${k}" rows="${r}">${esc(b[k]||'')}</textarea>`}`).join('')}
     </div>`:''}
   </div>`;
 }
 
 /* Builds the source the generator reads. Null until there is enough to
    write from: a topic, a home sub-cluster, and — if it is for an employer —
-   at least the organisation. */
+   at least the organization. */
 function briefToSource(b, sub){
   const topic = String(b.topic||'').trim();
   if(topic.length < 4 || !sub) return null;
@@ -3641,7 +3719,7 @@ function cumulativeQuiz(c, cu, student){
     const d = { vocabQuiz:[], contentQuiz:cu.questions||[] };
     const seed = S.previewSeed||7, key = `${c.id}|cum|${seed}`;
     const st = QUIZ[key] || (QUIZ[key] = { picks:{}, checked:false });
-    const qs = randomisedQuiz(cu.questions||[], seed);
+    const qs = randomizedQuiz(cu.questions||[], seed);
     const score = qs.filter((q,i)=>st.picks[i]===q.a).length;
     return `<div class="mt16" style="display:grid;gap:10px">${qs.map((q,i)=>`<div class="card pad" style="background:var(--surface-2);box-shadow:none">
       <b class="small">${i+1}. ${esc(q.stem||'')}</b>
@@ -3868,11 +3946,14 @@ function bindReuse(m, c){
 function repeatNote(c){
   const ws = weeksBeneath(c).filter(k=>k.content);
   const notes = [];
+  /* There are ten deliverable types, so some reuse is expected; one type is
+     flagged only when it dominates (3+ weeks and over 40% of them). */
+  const tally = {};
+  ws.forEach(k=>{ const d = k.strategies && pickOf('deliverable',k.strategies.deliverable).name; if(d) tally[d]=(tally[d]||0)+1; });
+  Object.keys(tally).forEach(d=>{ if(tally[d]>=3 && tally[d]/ws.length>0.4) notes.push(`${tally[d]} of ${ws.length} weeks end in a ${d.toLowerCase()}`); });
   for(let i=0;i<ws.length;i++) for(let j=i+1;j<ws.length;j++){
     const a=ws[i], b=ws[j];
-    const da = a.strategies && pickOf('deliverable',a.strategies.deliverable).name, db = b.strategies && pickOf('deliverable',b.strategies.deliverable).name;
     const ta = new Set((a.content.vocabulary||[]).map(v=>String(v.term||'').toLowerCase())), shared = (b.content.vocabulary||[]).filter(v=>ta.has(String(v.term||'').toLowerCase())).length;
-    if(da && da===db) notes.push(`“${a.title}” and “${b.title}” both end in a ${da.toLowerCase()}`);
     if(shared>=3) notes.push(`“${a.title}” and “${b.title}” share ${shared} vocabulary terms`);
   }
   if(!notes.length) return '';
@@ -3965,7 +4046,7 @@ function busyPanel(){
     <div class="spinner" style="margin:0 auto"></div>
     <h2 class="mt20">${esc(S.busyLabel||'Working')}</h2>
     <p class="small muted mt8" data-stage>${esc(S.busyStage||'')}</p>
-    <p class="xs muted2 mt8"><span data-elapsed>0s</span> · usually under a minute. In the product this runs as a job,
+    <p class="xs muted2 mt8"><span data-elapsed>${S.busyAt?Math.round((Date.now()-S.busyAt)/1000):0}s</span> · usually under two minutes. In the product this runs as a job,
       so you can leave this screen and come back.</p>
   </div>`;
 }
@@ -4168,7 +4249,7 @@ function weekLesson(c, student){
       ${!student && !S.editing?`<div class="xs muted2 mt12">${readingWords(d).toLocaleString()} words</div>`:''}
       ${(c.inputs||{}).video ? `<div class="divider"></div><div>
         <div><b class="small">${ic('cam')} Video</b><div class="small mt4">${videoLink(c.inputs.video)}</div>${student?'':`<div class="xs muted mt4">Your video, from Teacher inputs.</div>`}</div></div>` : ''}
-      ${d.videoOn ? videoBlock(d.video, student) : ''}
+      ${d.videoOn ? videoBlock(d.video, student, !!(c.inputs||{}).video) : ''}
       ${(d.vocabulary||[]).length?`<div class="divider"></div><b class="small">Vocabulary</b>
         ${S.editing && !student
           ? `<div class="mt12" style="display:grid;gap:8px">${d.vocabulary.map((v,i)=>`<div class="grid2" style="grid-template-columns:200px 1fr;gap:8px">
@@ -4230,10 +4311,16 @@ function weekLesson(c, student){
 
 /* The six kinds of visual support each look like what they are: a table is
    a table, steps are numbered, a checklist can be ticked. */
+/* A visual's own title, without the kind repeated ("Key point: …", or a title that is just "Career Connection"). */
+function visualTitle(v){
+  const kind = VISUAL_KINDS.find(k=>k.id===v.kind) || { name: v.kind||'Note' };
+  const t = String(v.title||'').replace(new RegExp('^\\s*'+kind.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[:—-]\\s*','i'),'').trim();
+  return t.toLowerCase()===kind.name.toLowerCase() ? '' : t;
+}
 function visualBlock(v, path, student){
   const kind = VISUAL_KINDS.find(k=>k.id===v.kind) || { name: v.kind||'Note' };
   /* Models often repeat the kind in the title ("Key point: …"). */
-  const title = String(v.title||'').replace(new RegExp('^\\s*'+kind.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[:—-]\\s*','i'),'').trim();
+  const title = visualTitle(v);
   const tone = {mistake:'ex',safety:'ex',workplace:'scen',career:'scen',keypoint:'tip',practice:'tip'}[v.kind] || 'why';
   const icon = {mistake:'flag',safety:'flag',workplace:'users',career:'users',checklist:'list',steps:'list',flow:'list',decision:'target',practice:'check',quickcheck:'target'}[v.kind] || 'bulb';
   if(S.editing && !student) return `<div class="callout ${tone}"><span class="ic">${ic(icon)}</span>
@@ -4271,7 +4358,7 @@ function visualBlock(v, path, student){
     </div></div>`;
 }
 
-function videoBlock(v, student){
+function videoBlock(v, student, second){
   if(!v || !(v.scenes||[]).length) return '';
   if(S.editing && !student) return `<div class="divider"></div>
     <b class="small">${ic('cam')} Video presentation</b>
@@ -4285,7 +4372,7 @@ function videoBlock(v, student){
     </div>`;
   return `<div class="divider"></div>
     <div class="spread wrap" style="gap:10px">
-      <b class="small">${ic('cam')} ${esc(v.title||'Video presentation')}</b>
+      <b class="small">${ic('cam')} ${second ? 'Generated video' + (v.title ? ' — '+esc(v.title) : '') : esc(v.title||'Video presentation')}</b>
       <div class="row gap" style="gap:8px;align-items:center">
         <span class="xs muted">${v.scenes.length} scenes · follows the reading</span>
         <button class="btn sm primary" data-wplay>${ic('arrowR')} Play</button>
@@ -4366,7 +4453,7 @@ const QUIZ = {};   /* a student's picks in the preview: { key: { qIndex: optInde
 function assessmentBlock(d, student, id){
   if(S.editing && !student) return assessmentEditor(d);
   const seed = student ? (S.previewSeed||7) : null;
-  const show = list => (seed!=null ? randomisedQuiz(list, seed) : (list||[]));
+  const show = list => (seed!=null ? randomizedQuiz(list, seed) : (list||[]));
   const quiz = (list, name) => {
     const key = `${id}|${name}|${seed}`, st = QUIZ[key] || (QUIZ[key] = { picks:{}, checked:false });
     const qs = show(list);
@@ -4463,7 +4550,7 @@ function seeded(seed){ let x=(seed*1103515245+12345)&0x7fffffff;
   return ()=>{ x=(x*1103515245+12345)&0x7fffffff; return x/0x7fffffff; }; }
 function shuffleWith(list, rnd){ const a=list.slice();
   for(let i=a.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function randomisedQuiz(list, seed){
+function randomizedQuiz(list, seed){
   const rnd = seeded(seed);
   return shuffleWith(list||[], rnd).map(q=>{
     const pairs=(q.o||[]).map((text,i)=>({text, right:i===q.a}));
@@ -4583,8 +4670,8 @@ function lessonDoc(c){
   const vterms = (d.vocabulary||[]).map(v=>v.term), used = new Set();
   const vis = v => { const k=(VISUAL_KINDS.find(x=>x.id===v.kind)||{name:v.kind}).name;
     if(v.kind==='table' && (v.items||[]).length){ const rows=v.items.map(r=>String(r).split('|').map(x=>x.trim()));
-      return `<p><b>${esc(k)}${v.title?' — '+esc(v.title):''}</b></p><table border="1" cellpadding="4">${rows.map((r,i)=>`<tr>${r.map(x=>i?`<td>${esc(x)}</td>`:`<th>${esc(x)}</th>`).join('')}</tr>`).join('')}</table>`; }
-    return `<p><b>${esc(k)}${v.title?' — '+esc(v.title):''}.</b> ${esc(v.body||'')}</p>${v.kind==='quickcheck'?((v.items||[])[0]?`<p><i>Answer: ${esc(v.items[0])}</i></p>`:''):(v.kind==='steps'||v.kind==='flow'?OL(v.items):UL(v.items))}`; };
+      return `<p><b>${esc(k)}${visualTitle(v)?' — '+esc(visualTitle(v)):''}</b></p><table border="1" cellpadding="4">${rows.map((r,i)=>`<tr>${r.map(x=>i?`<td>${esc(x)}</td>`:`<th>${esc(x)}</th>`).join('')}</tr>`).join('')}</table>`; }
+    return `<p><b>${esc(k)}${visualTitle(v)?' — '+esc(visualTitle(v)):''}.</b> ${esc(v.body||'')}</p>${v.kind==='quickcheck'?((v.items||[])[0]?`<p><i>Answer: ${esc(v.items[0])}</i></p>`:''):(v.kind==='steps'||v.kind==='flow'?OL(v.items):UL(v.items))}`; };
   const quiz = list => (list||[]).map((q,i)=>`<p><b>${i+1}. ${esc(q.stem||'')}</b></p>${UL(q.o)}`).join('');
   const key = list => `<ol>${(list||[]).map(q=>`<li>${esc((q.o||[])[q.a]||'')}</li>`).join('')}</ol>`;
   const rub = (e.rubric||[])[0] && e.rubric[0].criterion
@@ -4592,7 +4679,8 @@ function lessonDoc(c){
     : UL((e.rubric||[]).map(r=>`${r.level}: ${r.desc}`));
   const html = [
     H(1,'Credential Lesson'),
-    `<p>${[['Credential Name',h.credential],['Course Name',h.course],['Module Name',h.module],['Week Number',h.week],['Topic',d.topic||d.title],['Estimated Completion Time',`About ${weekMinutesOf(c)} minutes`]].map(([k,v])=>`<b>${k}:</b> ${esc(v!=null?String(v):'')}`).join('<br>')}</p>`,
+    // Header fields the teacher has not set are left out rather than copied as blank labels.
+    `<p>${[['Credential Name',h.credential],['Course Name',h.course],['Module Name',h.module],['Week Number',h.week],['Topic',d.topic||d.title],['Estimated Completion Time',`About ${weekMinutesOf(c)} minutes`]].filter(([,v])=>v!=null && String(v).trim()).map(([k,v])=>`<b>${k}:</b> ${esc(String(v))}`).join('<br>')}</p>`,
     H(3,'Learning Objectives'), OL(d.objectives),
     H(2,'Essential Question'), P(d.essentialQuestion),
     H(2,'Activating Strategy'), P((d.activating||{}).scenario), `<p><b>Before you learn this:</b> ${esc((d.activating||{}).prompt||'')}</p>`,
@@ -4635,7 +4723,7 @@ function partModal(c, part){
   modal(`<div><h2>Rewrite ${esc(spec.label)}</h2>
     <p class="small muted mt8">Only this part is rewritten; the rest of the week stays. The current version is kept under Earlier versions.</p>
     <label class="lbl mt16" for="partnote">What should change? <span class="muted2" style="font-weight:400">— optional</span></label>
-    <textarea class="field" id="partnote" rows="3" placeholder="e.g. Make the scenario a night shift at a distribution centre"></textarea>
+    <textarea class="field" id="partnote" rows="3" placeholder="e.g. Make the scenario a night shift at a distribution center"></textarea>
     <div class="actbar"><button class="btn" data-close>Cancel</button><button class="btn primary" data-partgo>Rewrite ${ic('arrowR')}</button></div></div>`,
     { after:(m,close)=>{ $('#partnote',m).focus(); $('[data-partgo]',m).onclick = ()=>{ const n=$('#partnote',m).value.trim(); close(); generatePart(c.id, part, n); }; } });
 }
@@ -4644,7 +4732,7 @@ function partModal(c, part){
    THE TEACHER'S PLANNING FORM, AND THE WEEK'S BINDINGS
    ---------------------------------------------------------
    The second output: the district's Acquisition Lesson Planning
-   Form, in its sections and its order, summarised rather than
+   Form, in its sections and its order, summarized rather than
    reproduced and with no grading detail. It exists to be copied
    into their own document with no editing.
    ========================================================= */
@@ -4888,7 +4976,7 @@ function bindSourceModal(m, c){
     if(tab==='brief'){
       const src = pending || briefToSource(S.srcBrief, subCluster(c.subCluster));
       if(!src){ toast(S.srcBrief.partner
-        ? 'A brief for an employer needs a topic and the organisation'
+        ? 'A brief for an employer needs a topic and the organization'
         : 'A brief needs a topic and a home sub-cluster'); return; }
       c.source = src;
     } else {
@@ -4948,7 +5036,8 @@ Return JSON only:
 { "questions": [ { "stem": "", "o": ["","","",""], "a": 0, "why": "", "from": "WEEK n: title — or two weeks for a combining question" } ] }
 
 Exactly ${n} questions. At least ${Math.max(2,Math.round(n/5))} must require combining material from more than one week —
-say so in "from". Wrong options plausible to somebody who half-learned it.`
+say so in "from". Wrong options plausible to somebody who half-learned it. In every question the four options are
+similar in length and detail; the right answer is never the longest or most specific one.`
     });
     const j = extractJSON(raw);
     const valid = q => q && q.stem && Array.isArray(q.o) && q.o.length===4 && Number.isInteger(q.a) && q.a>=0 && q.a<4;
@@ -4989,6 +5078,9 @@ Return JSON only: { "questions": [ { "stem": "", "o": ["","","",""], "a": 0, "wh
         if(idx>=0) j.questions[idx] = q; else if(j.questions.length < n) j.questions.push(q);
       });
     }
+    // Gem 3.13 applies here too: the same options repair as a week's content quiz.
+    { const tmp = { contentQuiz: j.questions }; await repairDistractors(tmp, SYS_WEEK, 4); j.questions = tmp.contentQuiz; }
+    stripLevelLabels(j.questions);
     spreadKeys(j.questions); j.keysSpread = true;
     j.basis = cumulativeBasis(c); j.builtAt = nowISO();
     c.cumulative = j; c.updatedAt = nowISO();
@@ -5045,7 +5137,7 @@ Rules:
 - The four academic shares must differ from one another and reflect the career. Never split evenly.
 - sequence contains exactly 30 entries numbered 1 to 30, and the count per strand must match strands.
 - Interleave the strands. Never block one subject together.
-- Every academic week is contextualised to this sub-cluster, not generic.`
+- Every academic week is contextualized to this sub-cluster, not generic.`
     });
     const j = extractJSON(raw);
     if(!j || !(j.strands||[]).length) throw new Error('The plan came back unreadable. Nothing was changed.');
@@ -5116,6 +5208,7 @@ function blockers(c){
   if(failing.length) out.push(`Failing checks in ${failing.map(k=>`“${k.title}”${canEdit(k)?'':` (owned by ${k.createdBy||'someone else'})`}`).join(', ')}.`);
   if(!c.cumulative) out.push('There is no cumulative assessment.');
   else if(cumulativeStale(c)) out.push('The cumulative assessment is out of date — the weeks changed after it was built.');
+  else if(cumulativeGivesAway(c.cumulative)) out.push(`In the cumulative assessment the right answer is the longest option in ${longestCorrect(c.cumulative.questions)} of ${c.cumulative.questions.length} questions — rebuild it or even out the options.`);
   if(c.level==='badge'){
     if(!c.badgePlan) out.push('The strand plan has not been made.');
     else {
@@ -5263,7 +5356,10 @@ function bindWorkflow(c){
       <textarea class="field" id="sbnote" rows="3" placeholder="e.g. Week 3's reading needs the unit conversions worked through"></textarea>
       <div class="actbar"><button class="btn" data-close>Cancel</button><button class="btn primary" data-sbok>Send back</button></div></div>`,
       { after:(m,close)=>{ $('#sbnote',m).focus();
-        $('[data-sbok]',m).onclick = ()=>{ const note=$('#sbnote',m).value.trim(); close(); moveTo(c, 'draft', 'Send back', false, note); }; } });
+        $('[data-sbok]',m).onclick = ()=>{ const f=$('#sbnote',m), note=f.value.trim();
+          // The author has to know what to change: a send-back always says why.
+          if(note.length<5){ f.classList.add('invalid'); f.placeholder='Say what needs to change — the author sees this'; f.focus(); toast('Add a note for the author'); return; }
+          close(); moveTo(c, 'draft', 'Send back', false, note); }; } });
   });
 }
 
@@ -5372,7 +5468,7 @@ function adminTaxonomy(){
       <h3>Career clusters</h3>
       <span class="pill">${CLUSTER_MAP.length} clusters · ${subs} sub-clusters · ${careers.toLocaleString()} careers</span>
     </div>
-    <p class="small muted mt4" style="max-width:72ch">Loaded from the district's programme maps. Open a
+    <p class="small muted mt4" style="max-width:72ch">Loaded from the district's program maps. Open a
       sub-cluster to correct its name, description or careers — the generator uses them for examples,
       and a renamed sub-cluster is renamed on every credential that uses it.</p>
     ${open?`<div class="card pad mt16" style="border:1.5px solid var(--brand);box-shadow:none">
@@ -5455,13 +5551,14 @@ function adminStandards(){
       the next generation uses yours.</p>
     <div class="mt20" style="display:grid;gap:9px">
       ${ALL_STANDARDS.map((s,i)=>`<div class="card pad" style="background:var(--surface-2);box-shadow:none">
-        <div class="row gap" style="gap:10px;align-items:flex-start">
-          <div class="stack" style="gap:6px;flex:none;min-width:190px;max-width:240px">
+        <div class="row gap wrap" style="gap:10px;align-items:flex-start">
+          <div class="stack" style="gap:6px;flex:0 1 240px;min-width:0">
             <span class="pill xs">${esc(s.code)}</span>
             ${s.status==='drafted'?`<span class="pill xs rose" title="Recalled by the model, not read from a district document">Drafted — check it</span>`:s.from?`<span class="xs muted2">From ${esc(s.from)}</span>`:''}
           </div>
-          <textarea class="field grow" rows="2" data-astd="${i}">${esc(s.desc)}</textarea>
-          ${s.status==='drafted'?`<div class="stack" style="gap:6px;flex:none"><button class="btn sm" data-astdok="${i}">Verified</button><button class="btn sm" data-astddel="${i}">Remove</button></div>`:''}
+          <textarea class="field" rows="2" data-astd="${i}" style="flex:1 1 260px;min-width:0">${esc(s.desc)}</textarea>
+          ${s.status==='drafted'?`<div class="stack" style="gap:6px;flex:none"><button class="btn sm" data-astdok="${i}">Verified</button><button class="btn sm" data-astddel="${i}">Remove</button></div>`
+            : s.from?`<div class="stack" style="gap:6px;flex:none"><button class="btn sm" data-astddel="${i}">Remove</button></div>`:''}
         </div></div>`).join('')}
     </div>
     <div class="card pad mt16" style="background:var(--surface-2);box-shadow:none">
@@ -5572,22 +5669,36 @@ function bindAdmin(){
   $$('[data-astdok]').forEach(b=> b.onclick = ()=>{ const x=ALL_STANDARDS[+b.dataset.astdok]; x.status='verified'; x.verifiedBy=(S.user||{}).name||''; persist(); toast(`${esc(x.code)} verified — weeks can now cite it`); render(); });
   $$('[data-astddel]').forEach(b=> b.onclick = ()=>{ ALL_STANDARDS.splice(+b.dataset.astddel,1); persist(); render(); });
   const fw = ()=> ($('#astdfw')||{}).value ? $('#astdfw').value.trim() : '';
+  /* Long standards documents are read in chunks, and a reply cut off by the
+     length limit still yields every complete entry in it. */
+  const stdEntries = raw => {
+    const out = extractJSON(raw);
+    if(out && Array.isArray(out.standards)) return out.standards;
+    return [...String(raw||'').matchAll(/\{\s*"code"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"desc"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g)]
+      .map(m=>{ try{ return { code: JSON.parse('"'+m[1]+'"'), desc: JSON.parse('"'+m[2]+'"') }; }catch(e){ return null; } }).filter(Boolean);
+  };
   const loadStd = async (text, from, drafted) => {
     if(!aiLive()){ toast('The content service is not available'); return; }
     toast(drafted ? `Drafting ${esc(from)}…` : `Reading ${esc(from)}…`);
     try{
-      const out = extractJSON(await callModel({ system:'You extract learning standards. Return JSON only.', maxTokens:6000, user: drafted
-? `List the standards of "${from}" that a grade 9–12 career and technical course would cite, each with its official code and its wording.
+      const chunks = drafted ? [''] : (String(text).match(/[\s\S]{1,14000}(?=\s|$)/g) || [String(text)]).slice(0, 12);
+      const list = [];
+      for(const [k, part] of chunks.entries()){
+        if(chunks.length>1) toast(`Reading ${esc(from)} — part ${k+1} of ${chunks.length}…`);
+        const raw = await callModel({ system:'You extract learning standards. Return JSON only.', maxTokens:8000, user: drafted
+? `List the standards of "${from}" that a grade 9–12 career and technical course would most often cite — at most 30 — each with its official code and its wording in one sentence.
 If you are not sure of an exact code, leave it out. Return JSON only: { "standards": [ { "code": "", "desc": "" } ] }`
 : `From the document below, list every learning standard, competency or Portrait of a Graduate attribute it defines, with its code
 exactly as the document writes it (or a short label if it has none) and its wording. Do not add anything the document does not contain.
-<document>\n${String(text).slice(0,30000)}\n</document>
-Return JSON only: { "standards": [ { "code": "", "desc": "" } ] }` }));
-      const list = ((out||{}).standards||[]).filter(x=>x && x.code && x.desc);
-      let n = 0;
-      list.forEach(x=>{ const code = String(x.code).trim(); if(standardByCode(code) && standardByCode(code).code.toLowerCase()===code.toLowerCase()) return;
+<document>\n${part}\n</document>
+Return JSON only: { "standards": [ { "code": "", "desc": "" } ] }` });
+        list.push(...stdEntries(raw).filter(x=>x && x.code && x.desc));
+      }
+      let n = 0; const seen = new Set();
+      list.forEach(x=>{ const code = String(x.code).trim(), key = code.toLowerCase(); if(seen.has(key)) return; seen.add(key);
+        if(standardByCode(code) && standardByCode(code).code.toLowerCase()===key) return;
         ALL_STANDARDS.push({ code, desc:String(x.desc).trim(), from, status: drafted ? 'drafted' : 'verified', framework: fw()||from }); n++; });
-      persist(); toast(n ? `${n} standard${n===1?'':'s'} added${drafted?' as drafted':''}` : 'No new standards found'); render();
+      persist(); toast(n ? `${n} standard${n===1?'':'s'} added${drafted?' as drafted — check each one':''}` : 'No new standards found'); render();
     }catch(e){ toast(esc(e.message||'Could not read the standards')); }
   };
   const df=$('[data-astddraft]'); if(df) df.onclick = ()=>{ if(!fw()){ toast('Name the framework first'); return; } loadStd('', fw(), true); };
@@ -5657,7 +5768,7 @@ Return JSON only: { "standards": [ { "code": "", "desc": "" } ] }` }));
    each a seat count at a named employer with a named supervisor, and one gate
    this product controls: the employer's onboarding week, built from their own
    material, must be published before the placement opens. Students and their
-   enrolment come with the student phase.
+   enrollment come with the student phase.
    ========================================================= */
 const PLACEMENT_MODELS = [
   { id:'inclusive', name:'Inclusive', sub:'A cohort, placed together', blurb:'Students work alongside a community partner as a structured team; the onboarding week is shared across the cohort.' },
@@ -5690,7 +5801,8 @@ function adminPlacements(){
           <div class="row gap wrap mt12" style="gap:8px;align-items:center">
             ${w ? `<button class="btn sm" data-plopen="${w.id}">Open “${esc(w.title)}”</button>`
                 : `<button class="btn sm primary" data-plwrite="${i}">${ic('spark')} Write the onboarding week</button>
-                   <select class="field" data-pllink="${i}" style="max-width:260px"><option value="">…or link an existing week</option>${nanos.map(n=>`<option value="${n.id}">${esc(n.title)}</option>`).join('')}</select>`}
+                   <select class="field" data-pllink="${i}" style="max-width:260px"><option value="">…or link an existing week</option>${(()=>{ const same=nanos.filter(n=>n.subCluster===pl.subCluster), other=nanos.filter(n=>n.subCluster!==pl.subCluster); const o=l=>l.map(n=>`<option value="${n.id}">${esc(n.title)}</option>`).join('');
+                     return (same.length?`<optgroup label="In ${esc(pl.subCluster||'this sub-cluster')}">${o(same)}</optgroup>`:'') + (other.length?`<optgroup label="Other weeks">${o(other)}</optgroup>`:''); })()}</select>`}
             <span class="grow"></span><button class="btn sm" data-pldel="${i}">Remove</button>
           </div></div>`; }).join('')
       : `<div class="small muted">No placements yet.</div>`}
@@ -5766,6 +5878,8 @@ function restore(){
       if(c.badgePlan) reconcileBadgePlan(c.badgePlan);
       if(c.content && c.content.summarizing && c.content.summarizing.activity) tidyActivity(c.content.summarizing.activity);
       if(c.cumulative && !c.cumulative.keysSpread){ spreadKeys(c.cumulative.questions); c.cumulative.keysSpread = true; }
+      // Weeks written before these rules: level labels stripped from question text; the strand recorded on the content.
+      if(c.content){ stripLevelLabels(c.content.contentQuiz); stripLevelLabels(c.content.vocabQuiz); if(!c.content.strand) c.content.strand = c.strand || 'Career & Technical'; }
       // Weeks written when every week carried a generated video keep it switched on.
       if(c.content && c.content.videoOn==null){ c.content.videoOn = !!(c.content.video && (c.content.video.scenes||[]).length); if(c.videoGen==null) c.videoGen = c.content.videoOn; }
     });
