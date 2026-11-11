@@ -664,7 +664,7 @@ table.rubric tbody th{background:var(--surface-2);font-weight:600;white-space:no
 <body>
 <div id="app"></div>
 <script>
-const BUILD_ID = '20261111-0927';
+const BUILD_ID = '20261111-1003';
 /* =========================================================
    ICONS
    Inline SVG so the product has no icon-font dependency and
@@ -1950,10 +1950,19 @@ function placeholderHits(d){
 const GENERIC_HEADING = /^\s*(main\s+)?(concept|section|part|topic)\s*\d+\b/i;
 
 /* Assessment Intelligence Engine — a question reads as a workplace decision
-   when it sets up a situation before asking: long enough to carry one, and
-   naming a person, a role or what happened. */
-const isSituated = q => { const t = String((q&&q.stem)||''); const w = t.split(/\s+/).filter(Boolean).length;
-  return w >= 16 && /\b(you|your|a|an|the)\s+[a-z-]+\s+(is|are|was|were|has|have|notices?|finds?|sees?|receives?|arrives?|reports?|asks?)\b|\b(technician|operator|nurse|manager|worker|supervisor|assistant|customer|client|patient|crew|inspector|planner|team|employee|coordinator|specialist|agent|driver|guest|student)\b/i.test(t); };
+   when it sets up a situation before asking: a setup sentence of its own
+   (someone, something that happened) ahead of the question, or one long
+   sentence that puts the student or a person in the moment. It reads the
+   shape of the stem, so any field's job titles count. */
+const isSituated = q => {
+  const t = String((q&&q.stem)||'').trim(); if(!t) return false;
+  const words = x => x.split(/\s+/).filter(Boolean).length;
+  const sentences = t.match(/[^.?!]+[.?!]+(\s|$)|[^.?!]+$/g) || [t];
+  const setup = sentences.slice(0, -1).join(' ');
+  const actor = /\b(you|your|a|an|the|their|his|her)\b|\b[A-Z][a-z]+\b/;
+  if(words(setup) >= 8 && actor.test(setup)) return true;
+  return words(t) >= 16 && /\b(you|your|a|an|the)\s+[a-z-]+\s+(is|are|was|were|has|have|notices?|finds?|sees?|receives?|arrives?|reports?|asks?)\b|\b(you are|you work|you find|you notice|you receive|you discover)\b/i.test(t);
+};
 
 /* Program Maps — the district's 1–10 weighting of academic courses for a
    cluster, grouped by the four badge strands. */
@@ -2453,26 +2462,49 @@ Return JSON only: { "add": [ { "section": 0, "term": "", "sentence": "" } ] }` }
 }
 
 /* 3.13 — options rewritten where the right answer stands out by length, or a
-   wrong option is recycled. The right answer's meaning and position stay. */
+   wrong option is recycled. Each flagged question gets its own length target;
+   each rewrite is kept question by question, only where it fixes that
+   question, and the right answer stays at its index (for vocabulary, the
+   same term). Two passes at most. */
+function optionStandsOut(q){
+  const L=(q.o||[]).map(o=>String(o||'').length), a=L[q.a]||0, m2=Math.max(0,...L.filter((_,k)=>k!==q.a));
+  return a>m2 && a>=m2*1.2;
+}
+function reusedAt(list){
+  const norm = o => String(o||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const seen = {}; (list||[]).forEach((q,i)=>(q.o||[]).forEach((o,k)=>{ if(k!==q.a){ const n=norm(o); (seen[n]=seen[n]||[]).push(i); } }));
+  return Object.values(seen).filter(v=>v.length>1).flatMap(v=>v.slice(1));
+}
 async function repairDistractors(j, system){
-  const bad = list => (list||[]).map((q,i)=>({q,i})).filter(({q})=>{
-    const L=(q.o||[]).map(o=>String(o||'').length), a=L[q.a]||0, m2=Math.max(0,...L.filter((_,k)=>k!==q.a));
-    return a>m2 && a>=m2*1.2; });
   for(const key of ['contentQuiz','vocabQuiz']){
-    const list = j[key]||[]; const reuse = key==='contentQuiz' ? reusedOptions(list) : 0;
-    if(longestCorrect(list) <= LONGEST_LIMIT && !reuse) continue;
-    busyStage(key==='contentQuiz'?'Evening out the content question options':'Evening out the vocabulary question options');
-    const targets = bad(list).map(x=>x.i);
-    const out = extractJSON(await callModel({ system, maxTokens:4000, user:
-`In these quiz questions the right answer (index "a") is often the longest option${reuse?', and some wrong options are reused across questions':''}.
-Rewrite the OPTIONS of questions ${targets.length?targets.join(', '):'that need it'} so all four options are similar in length and style, the right answer
-keeps its meaning and stays at index "a", and wrong options are plausible, distinct and not reused across questions.${key==='vocabQuiz'?' Options stay vocabulary terms from the list.':''}
-${JSON.stringify(list.map((q,i)=>({i, stem:q.stem, o:q.o, a:q.a})))}
+    for(let tries=0; tries<2; tries++){
+      const list = j[key]||[]; const reuse = key==='contentQuiz' ? reusedOptions(list) : 0;
+      if(longestCorrect(list) <= LONGEST_LIMIT && !reuse) break;
+      busyStage(key==='contentQuiz'?'Evening out the content question options':'Evening out the vocabulary question options');
+      const rIdx = key==='contentQuiz' ? reusedAt(list) : [];
+      const targets = list.map((q,i)=>i).filter(i=>optionStandsOut(list[i]) || rIdx.includes(i));
+      if(!targets.length) break;
+      const terms = (j.vocabulary||[]).map(v=>v.term);
+      const out = extractJSON(await callModel({ system, maxTokens:4000, user:
+`Multiple-choice options give the answer away: the right answer is much longer or more detailed than the wrong ones${reuse?', or a wrong option is reused from another question':''}.
+Fix only these questions:
+${targets.map(i=>{ const q=list[i], n=String(q.o[q.a]||'').length; return `- i=${i}: "${q.stem}"\n  right answer (index ${q.a}, ${n} characters): "${q.o[q.a]}"\n  current options: ${JSON.stringify(q.o)}${rIdx.includes(i)?'\n  (one wrong option repeats another question\'s option; replace it)':''}`; }).join('\n')}
+
+${key==='vocabQuiz'
+ ? `Options must stay terms from this list, written exactly: ${terms.join(', ')}. Keep the right answer exactly as it is, at its index. Choose wrong terms close to it in length and easy to confuse with it.`
+ : `For each question, return four options of similar length (each within about 15% of the others) and the same style. Either make each wrong option as specific as the right answer, with a believable detail a student who half-learned the reading would choose, or tighten the right answer to the length of the others without changing what it means. Keep the right answer at index ${'"'}a${'"'} and keep it correct. Wrong options must be plainly wrong to someone who learned the reading — never partly right, never a weaker version of the right answer — and not reused from any other question.`}
 Return JSON only: { "questions": [ { "i": 0, "o": ["","","",""] } ] }` }));
-    const next = JSON.parse(JSON.stringify(list));
-    ((out||{}).questions||[]).forEach(r=>{ const q=next[+r.i]; if(q && Array.isArray(r.o) && r.o.length===4 && r.o.every(x=>String(x||'').trim())) q.o = r.o.map(String); });
-    const score = l => longestCorrect(l) + (key==='contentQuiz'?reusedOptions(l):0);
-    if(score(next) < score(list) && (key!=='vocabQuiz' || vocabMiss(j,next)<=vocabMiss(j,list))) j[key] = next;
+      const next = JSON.parse(JSON.stringify(list)); let changed = 0;
+      ((out||{}).questions||[]).forEach(r=>{
+        const q = next[+r.i]; if(!q || !targets.includes(+r.i) || !Array.isArray(r.o) || r.o.length!==4 || !r.o.every(x=>String(x||'').trim())) return;
+        const cand = Object.assign({}, q, { o: r.o.map(x=>String(x).trim()) });
+        if(key==='vocabQuiz' && (cand.o[q.a]!==q.o[q.a] || !cand.o.every(o=>terms.includes(o)))) return;
+        if(!optionStandsOut(cand) || (optionStandsOut(q) && !optionStandsOut(cand))){ next[+r.i] = cand; changed++; }
+      });
+      const score = l => longestCorrect(l) + (key==='contentQuiz'?reusedOptions(l):0);
+      if(!changed || score(next) >= score(list) || (key==='vocabQuiz' && vocabMiss(j,next) > vocabMiss(j,list))) break;
+      j[key] = next;
+    }
   }
 }
 
@@ -2667,7 +2699,7 @@ Return JSON only: { ${KEYS.map(k=>`"${k}": …`).join(', ')} }` });
     j.title = cred.title;
     pushRevision(cred, 'edited', j);
     cred.content = j; cred.updatedAt = cred.contentAt = nowISO();
-    toast(`${esc(spec.label)} rewritten · ${checksPassed(j)} of ${checksTotal(j)} checks passed`);
+    toast(`${esc(spec.label)} ${part==='video' && !cur.video ? 'written' : 'rewritten'} · ${checksPassed(j)} of ${checksTotal(j)} checks passed`);
   }catch(e){ toast(esc(e.message||'Could not rewrite that part')); }
   busyEnd();
 }
@@ -3036,7 +3068,7 @@ function createSource(){
         <button class="btn sm" data-cclearsrc>Remove</button>
       </div></div>`:''}
 
-    ${formCard(createForm(c))}
+    <div data-formcard>${formCard(createForm(c))}</div>
 
     <label class="lbl mt20">Title <span class="muted2" style="font-weight:400">— optional; leave it and the week is named when it is written</span></label>
     <input class="field" id="ctitle" value="${esc(c.title)}" placeholder="Named when it is written">
@@ -3118,6 +3150,8 @@ function bindCreate(){
     c.pasteText = paste.value; syncCreate();
     if(was !== !!createForm(c)){ const pos = paste.selectionStart; render(); const np=$('#cpaste'); if(np){ np.focus(); np.setSelectionRange(pos,pos); } return; }
     const w=$('[data-cwords]'); if(w) w.textContent = c.pasteText.trim() ? wordCount(c.pasteText).toLocaleString()+' words'+(wordCount(c.pasteText)<40?' — at least 40 needed':'') : 'Nothing pasted yet';
+    // Keep the recognised-form summary in step with the text as it grows (typed, not pasted in one go).
+    const fc=$('[data-formcard]'); if(fc) fc.innerHTML = formCard(createForm(c));
   };
   bindBriefForm(document, c.brief || (c.brief={}), subCluster(c.subCluster), ()=> syncCreate());
 
